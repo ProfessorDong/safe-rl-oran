@@ -2,8 +2,8 @@
 
 Reference simulator and reproducible numerical results for the paper
 
-> **Risk-Limited Safe Reinforcement Learning for Energy-Aware O-RAN
-> Scheduling Under Tail-QoS Guarantees**
+> **Lyapunov-Guided Safe Reinforcement Learning for Energy-Aware O-RAN
+> Scheduling under Tail-Risk Constraints**
 > Liang Dong, Senior Member, IEEE.
 > Submitted to *IEEE Transactions on Cognitive Communications and Networking*.
 
@@ -101,8 +101,8 @@ MIT. See `LICENSE`.
 ```bibtex
 @article{Dong_SafeRL_TCCN_2026,
   author  = {Liang Dong},
-  title   = {Risk-Limited Safe Reinforcement Learning for Energy-Aware
-             {O-RAN} Scheduling Under Tail-{QoS} Guarantees},
+  title   = {Lyapunov-Guided Safe Reinforcement Learning for Energy-Aware
+             {O-RAN} Scheduling under Tail-Risk Constraints},
   journal = {IEEE Transactions on Cognitive Communications and Networking},
   year    = {2026},
   note    = {Submitted.}
