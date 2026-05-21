@@ -78,27 +78,36 @@ def main():
     Vs = np.array(Vs); Vlo = np.array(Vlo); Vhi = np.array(Vhi)
 
     os.makedirs(FIG_DIR, exist_ok=True)
-    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.4),
-                             constrained_layout=True)
-    ax = axes[0]
-    ax.errorbar(Gs, Ps, yerr=[Ps - Plo, Phi - Ps],
-                marker="o", color="#1f77b4", capsize=3, linewidth=1.2)
-    ax.set_xlabel(r"Risk budget $\Gamma$")
-    ax.set_ylabel("Average power (W)")
-    ax.grid(True, alpha=0.3)
+    with plt.rc_context({
+        "font.size":       12,
+        "axes.labelsize":  12,
+        "legend.fontsize": 11,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
+    }):
+        fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.0),
+                                  constrained_layout=True)
+        ax = axes[0]
+        ax.errorbar(Gs, Ps, yerr=[Ps - Plo, Phi - Ps],
+                    marker="o", markersize=7, color="#1f77b4",
+                    capsize=4, linewidth=1.6)
+        ax.set_xlabel(r"Risk budget $\Gamma$")
+        ax.set_ylabel("Average power (W)")
+        ax.grid(True, alpha=0.3)
 
-    ax = axes[1]
-    ax.errorbar(Gs, Vs, yerr=[Vs - Vlo, Vhi - Vs],
-                marker="s", color="#d62728", capsize=3, linewidth=1.2)
-    ax.axhline(5.0, color="k", linestyle=":", linewidth=0.7,
-               label=r"$1{-}\beta=5\%$")
-    ax.set_xlabel(r"Risk budget $\Gamma$")
-    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
-    ax.legend(loc="upper right", frameon=False)
-    ax.grid(True, alpha=0.3)
+        ax = axes[1]
+        ax.errorbar(Gs, Vs, yerr=[Vs - Vlo, Vhi - Vs],
+                    marker="s", markersize=7, color="#d62728",
+                    capsize=4, linewidth=1.6)
+        ax.axhline(5.0, color="k", linestyle=":", linewidth=0.8,
+                   label=r"$1{-}\beta=5\%$")
+        ax.set_xlabel(r"Risk budget $\Gamma$")
+        ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
+        ax.legend(loc="upper right", frameon=False)
+        ax.grid(True, alpha=0.3)
 
-    fig.savefig(os.path.join(FIG_DIR, "e3_gamma_sweep.pdf"))
-    plt.close(fig)
+        fig.savefig(os.path.join(FIG_DIR, "e3_gamma_sweep.pdf"))
+        plt.close(fig)
     print(f"[fig] wrote {FIG_DIR}/e3_gamma_sweep.pdf")
 
 

@@ -56,11 +56,16 @@ def _ci_band(ax, x, y_seeds, color, label):
     if y_seeds.size == 0:
         return
     mu = y_seeds.mean(axis=0)
-    # Smooth the curve (moving average, window=5).
-    win = 5
+    # Smooth the cross-seed mean with a wider moving-average window so that
+    # the per-update sampling noise (which is large for safe-RL violation
+    # rates) does not create misleading boundary spikes. We use reflect
+    # padding so that boundary values are not pulled toward the edge.
+    win = 15
     if mu.shape[0] > win:
+        pad = win // 2
+        padded = np.pad(mu, pad, mode="reflect")
         kernel = np.ones(win) / win
-        mu = np.convolve(mu, kernel, mode="same")
+        mu = np.convolve(padded, kernel, mode="valid")
     if y_seeds.shape[0] >= 3:
         lo = np.percentile(y_seeds, 2.5, axis=0)
         hi = np.percentile(y_seeds, 97.5, axis=0)
@@ -107,7 +112,7 @@ def fig_e1_training_violation(train: dict, path_pdf: str):
     ax.set_xlabel("Training update")
     ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
     ax.set_ylim(bottom=0)
-    ax.legend(loc="upper right", frameon=False)
+    ax.legend(loc="center right", frameon=False)
     ax.grid(True, alpha=0.3)
     fig.savefig(path_pdf)
     plt.close(fig)
@@ -117,51 +122,61 @@ def fig_e1_training_violation(train: dict, path_pdf: str):
 def fig_e2_final_ops(eval_json: dict, path_pdf: str):
     """Side-by-side bar plot: violation% and avg power across all 4 controllers."""
     ctrls = ["SafeRL", "UnconstrainedPPO", "LyapunovOnly", "Threshold"]
-    fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.4), constrained_layout=True)
+    # Bump font size for this figure only via rc_context.
+    with plt.rc_context({
+        "font.size":       12,
+        "axes.labelsize":  12,
+        "xtick.labelsize": 11,
+        "ytick.labelsize": 11,
+    }):
+        fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.0),
+                                  constrained_layout=True)
 
-    # Panel A: violation rate
-    ax = axes[0]
-    bars = []
-    for i, c in enumerate(ctrls):
-        d = eval_json.get(c, {}).get("viol_rate", {})
-        if not d:
-            continue
-        m = d["mean"] * 100.0
-        lo = d["lo"] * 100.0
-        hi = d["hi"] * 100.0
-        bar = ax.bar(i, m, color=COLORS[c],
-                     yerr=[[m - lo], [hi - m]], capsize=3,
-                     edgecolor="k", linewidth=0.3, width=0.65)
-        bars.append(bar)
-        ax.text(i, m, f"{m:.1f}%", ha="center", va="bottom", fontsize=7)
-    ax.axhline(5.0, color="k", linestyle=":", linewidth=0.7)
-    ax.set_xticks(range(len(ctrls)))
-    ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
-                        for c in ctrls], rotation=18, ha="right")
-    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
-    ax.set_ylim(0, max(105, ax.get_ylim()[1]))
-    ax.grid(True, axis="y", alpha=0.3)
+        # Panel A: violation rate
+        ax = axes[0]
+        bars = []
+        for i, c in enumerate(ctrls):
+            d = eval_json.get(c, {}).get("viol_rate", {})
+            if not d:
+                continue
+            m = d["mean"] * 100.0
+            lo = d["lo"] * 100.0
+            hi = d["hi"] * 100.0
+            bar = ax.bar(i, m, color=COLORS[c],
+                         yerr=[[m - lo], [hi - m]], capsize=3,
+                         edgecolor="k", linewidth=0.3, width=0.65)
+            bars.append(bar)
+            ax.text(i, m, f"{m:.1f}%", ha="center", va="bottom",
+                    fontsize=10)
+        ax.axhline(5.0, color="k", linestyle=":", linewidth=0.7)
+        ax.set_xticks(range(len(ctrls)))
+        ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
+                            for c in ctrls], rotation=18, ha="right")
+        ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
+        ax.set_ylim(0, max(115, ax.get_ylim()[1]))
+        ax.grid(True, axis="y", alpha=0.3)
 
-    # Panel B: avg power
-    ax = axes[1]
-    for i, c in enumerate(ctrls):
-        d = eval_json.get(c, {}).get("avg_power_W", {})
-        if not d:
-            continue
-        m = d["mean"]
-        lo = d["lo"]
-        hi = d["hi"]
-        ax.bar(i, m, color=COLORS[c],
-               yerr=[[m - lo], [hi - m]], capsize=3,
-               edgecolor="k", linewidth=0.3, width=0.65)
-        ax.text(i, m, f"{m:.0f} W", ha="center", va="bottom", fontsize=7)
-    ax.set_xticks(range(len(ctrls)))
-    ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
-                        for c in ctrls], rotation=18, ha="right")
-    ax.set_ylabel("Average power per cluster (W)")
-    ax.grid(True, axis="y", alpha=0.3)
+        # Panel B: avg power
+        ax = axes[1]
+        for i, c in enumerate(ctrls):
+            d = eval_json.get(c, {}).get("avg_power_W", {})
+            if not d:
+                continue
+            m = d["mean"]
+            lo = d["lo"]
+            hi = d["hi"]
+            ax.bar(i, m, color=COLORS[c],
+                   yerr=[[m - lo], [hi - m]], capsize=3,
+                   edgecolor="k", linewidth=0.3, width=0.65)
+            ax.text(i, m, f"{m:.0f} W", ha="center", va="bottom",
+                    fontsize=10)
+        ax.set_xticks(range(len(ctrls)))
+        ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
+                            for c in ctrls], rotation=18, ha="right")
+        ax.set_ylabel("Average power per cluster (W)")
+        ax.grid(True, axis="y", alpha=0.3)
 
-    fig.savefig(path_pdf)
+        fig.savefig(path_pdf)
     plt.close(fig)
     print(f"[fig] wrote {path_pdf}")
 
