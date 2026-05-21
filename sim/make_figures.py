@@ -110,7 +110,7 @@ def fig_e1_training_violation(train: dict, path_pdf: str):
     ax.axhline((1.0 - 0.95) * 100, color="k", linestyle=":", linewidth=0.7,
                label=r"$1{-}\beta=5\%$ target")
     ax.set_xlabel("Training update")
-    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
+    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (%)")
     ax.set_ylim(bottom=0)
     ax.legend(loc="center right", frameon=False)
     ax.grid(True, alpha=0.3)
@@ -124,13 +124,15 @@ def fig_e2_final_ops(eval_json: dict, path_pdf: str):
     ctrls = ["SafeRL", "UnconstrainedPPO", "LyapunovOnly", "Threshold"]
     # Bump font size for this figure only via rc_context.
     with plt.rc_context({
-        "font.size":       12,
-        "axes.labelsize":  12,
-        "xtick.labelsize": 11,
-        "ytick.labelsize": 11,
+        "font.size":       14,
+        "axes.labelsize":  14,
+        "xtick.labelsize": 13,
+        "ytick.labelsize": 13,
     }):
-        fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.0),
+        fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.4),
                                   constrained_layout=True)
+        fig.set_constrained_layout_pads(w_pad=0.10, h_pad=0.02,
+                                         wspace=0.06)
 
         # Panel A: violation rate
         ax = axes[0]
@@ -147,12 +149,12 @@ def fig_e2_final_ops(eval_json: dict, path_pdf: str):
                          edgecolor="k", linewidth=0.3, width=0.65)
             bars.append(bar)
             ax.text(i, m, f"{m:.1f}%", ha="center", va="bottom",
-                    fontsize=10)
+                    fontsize=12)
         ax.axhline(5.0, color="k", linestyle=":", linewidth=0.7)
         ax.set_xticks(range(len(ctrls)))
         ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
                             for c in ctrls], rotation=18, ha="right")
-        ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
+        ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (%)")
         ax.set_ylim(0, max(115, ax.get_ylim()[1]))
         ax.grid(True, axis="y", alpha=0.3)
 
@@ -169,11 +171,11 @@ def fig_e2_final_ops(eval_json: dict, path_pdf: str):
                    yerr=[[m - lo], [hi - m]], capsize=3,
                    edgecolor="k", linewidth=0.3, width=0.65)
             ax.text(i, m, f"{m:.0f} W", ha="center", va="bottom",
-                    fontsize=10)
+                    fontsize=12)
         ax.set_xticks(range(len(ctrls)))
         ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
                             for c in ctrls], rotation=18, ha="right")
-        ax.set_ylabel("Average power per cluster (W)")
+        ax.set_ylabel("Average power (W)")
         ax.grid(True, axis="y", alpha=0.3)
 
         fig.savefig(path_pdf)

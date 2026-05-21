@@ -79,14 +79,16 @@ def main():
 
     os.makedirs(FIG_DIR, exist_ok=True)
     with plt.rc_context({
-        "font.size":       12,
-        "axes.labelsize":  12,
-        "legend.fontsize": 11,
-        "xtick.labelsize": 11,
-        "ytick.labelsize": 11,
+        "font.size":       16,
+        "axes.labelsize":  16,
+        "legend.fontsize": 14,
+        "xtick.labelsize": 14,
+        "ytick.labelsize": 14,
     }):
-        fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.0),
+        fig, axes = plt.subplots(1, 2, figsize=(9.6, 3.6),
                                   constrained_layout=True)
+        fig.set_constrained_layout_pads(w_pad=0.10, h_pad=0.02,
+                                         wspace=0.08)
         ax = axes[0]
         ax.errorbar(Gs, Ps, yerr=[Ps - Plo, Phi - Ps],
                     marker="o", markersize=7, color="#1f77b4",
@@ -102,7 +104,7 @@ def main():
         ax.axhline(5.0, color="k", linestyle=":", linewidth=0.8,
                    label=r"$1{-}\beta=5\%$")
         ax.set_xlabel(r"Risk budget $\Gamma$")
-        ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
+        ax.set_ylabel("Loss-exceedance rate (%)")
         ax.legend(loc="upper right", frameon=False)
         ax.grid(True, alpha=0.3)
 
