@@ -93,7 +93,7 @@ def main():
     ax.axhline(5.0, color="k", linestyle=":", linewidth=0.7,
                label=r"$1{-}\beta=5\%$")
     ax.set_xlabel(r"Risk budget $\Gamma$")
-    ax.set_ylabel("Violation rate (\\%)")
+    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
     ax.legend(loc="upper right", frameon=False)
     ax.grid(True, alpha=0.3)
 

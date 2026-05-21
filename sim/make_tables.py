@@ -45,7 +45,8 @@ def table_headline(evalj: dict, path_tex: str):
     rows.append(r"  \begin{tabular}{lccccc}")
     rows.append(r"    \toprule")
     rows.append(r"    Controller & Avg.\ power (W) & CVaR$_{\beta}$ "
-                r"& Viol.\ rate (\%) & $p99$ delay (ms) & Toggles/min \\")
+                r"& $\Pr\{\ell>\Gamma\}$ (\%) & $p99$ backlog-delay (ms) "
+                r"& Toggles/min \\")
     rows.append(r"    \midrule")
     for c in CTRLS:
         d = evalj.get(c, {})

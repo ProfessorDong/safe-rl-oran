@@ -105,7 +105,7 @@ def fig_e1_training_violation(train: dict, path_pdf: str):
     ax.axhline((1.0 - 0.95) * 100, color="k", linestyle=":", linewidth=0.7,
                label=r"$1{-}\beta=5\%$ target")
     ax.set_xlabel("Training update")
-    ax.set_ylabel("Violation rate (\\%)")
+    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
     ax.set_ylim(bottom=0)
     ax.legend(loc="upper right", frameon=False)
     ax.grid(True, alpha=0.3)
@@ -138,7 +138,7 @@ def fig_e2_final_ops(eval_json: dict, path_pdf: str):
     ax.set_xticks(range(len(ctrls)))
     ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
                         for c in ctrls], rotation=18, ha="right")
-    ax.set_ylabel("CVaR violation rate (\\%)")
+    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (\%)")
     ax.set_ylim(0, max(105, ax.get_ylim()[1]))
     ax.grid(True, axis="y", alpha=0.3)
 

@@ -5,7 +5,7 @@
   \small
   \begin{tabular}{lccccc}
     \toprule
-    Controller & Avg.\ power (W) & CVaR$_{\beta}$ & Viol.\ rate (\%) & $p99$ delay (ms) & Toggles/min \\
+    Controller & Avg.\ power (W) & CVaR$_{\beta}$ & $\Pr\{\ell>\Gamma\}$ (\%) & $p99$ backlog-delay (ms) & Toggles/min \\
     \midrule
     Safe-RL (proposed) & $1317.7_{[1294.5,\,1341.3]}$ & $5.94_{[4.67,\,7.42]}$ & $17.5_{[10.1,\,26.7]}$ & $109_{[55,\,180]}$ & $0.0_{[0.0,\,0.0]}$ \\
     Unconstrained PPO & $350.9_{[273.9,\,418.3]}$ & $10.00_{[10.00,\,10.00]}$ & $99.9_{[99.9,\,99.9]}$ & $79017_{[74153,\,84584]}$ & $27.1_{[21.1,\,33.7]}$ \\
