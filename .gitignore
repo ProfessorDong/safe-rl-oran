@@ -1,0 +1,48 @@
+# Paper source (private until publication)
+main.tex
+main*.pdf
+main*.aux
+main*.log
+main*.out
+main*.bbl
+main*.blg
+main*.synctex.gz
+main*.fls
+main*.fdb_latexmk
+main*.toc
+
+# Claude / project metadata
+CLAUDE.md
+PROJECT_STATUS.md
+*.jsonl
+
+# Datasets (large, license-controlled; see README for sources)
+sim/data/
+
+# Large intermediate experiment artifacts (regenerable)
+sim/results/train_safe_rl.json
+sim/results/run.log
+sim/results/run_*.log
+sim/results/train.log
+sim/results/gamma_sweep.log
+
+# Python build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# LaTeX intermediates from figure subdirectories
+figures/

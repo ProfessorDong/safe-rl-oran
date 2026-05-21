@@ -1,0 +1,16 @@
+\begin{table*}[t]
+  \centering
+  \caption{Headline comparison on 10 evaluation seeds (100\,s episodes, $\beta=0.95$, $\Gamma=3.0$). Subscripts are 95\% bootstrap CIs. Lower is better for all columns.}
+  \label{tab:headline}
+  \small
+  \begin{tabular}{lccccc}
+    \toprule
+    Controller & Avg.\ power (W) & CVaR$_{\beta}$ & Viol.\ rate (\%) & $p99$ delay (ms) & Toggles/min \\
+    \midrule
+    Safe-RL (proposed) & $1317.7_{[1294.5,\,1341.3]}$ & $5.94_{[4.67,\,7.42]}$ & $17.5_{[10.1,\,26.7]}$ & $109_{[55,\,180]}$ & $0.0_{[0.0,\,0.0]}$ \\
+    Unconstrained PPO & $350.9_{[273.9,\,418.3]}$ & $10.00_{[10.00,\,10.00]}$ & $99.9_{[99.9,\,99.9]}$ & $79017_{[74153,\,84584]}$ & $27.1_{[21.1,\,33.7]}$ \\
+    Lyapunov drift & $908.6_{[907.5,\,909.8]}$ & $5.70_{[5.62,\,5.79]}$ & $38.4_{[38.0,\,38.7]}$ & $61_{[60,\,62]}$ & $5674.3_{[5666.3,\,5681.9]}$ \\
+    Threshold heuristic & $454.1_{[452.8,\,455.8]}$ & $10.00_{[10.00,\,10.00]}$ & $100.0_{[99.9,\,100.0]}$ & $199_{[198,\,200]}$ & $2631.2_{[2627.8,\,2635.3]}$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
