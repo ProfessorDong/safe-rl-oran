@@ -11,6 +11,15 @@ main*.fls
 main*.fdb_latexmk
 main*.toc
 
+# Cover letter and submission-prep documents (private until submission)
+cover_letter.tex
+cover_letter.txt
+cover_letter.pdf
+cover_letter.aux
+cover_letter.log
+cover_letter.out
+reference_verification.txt
+
 # Claude / project metadata
 CLAUDE.md
 PROJECT_STATUS.md

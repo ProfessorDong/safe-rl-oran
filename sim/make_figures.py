@@ -100,7 +100,8 @@ def load_training_history(path: str) -> dict:
 
 def fig_e1_training_violation(train: dict, path_pdf: str):
     """Per-update violation rate, SafeRL vs UnconstrainedPPO."""
-    fig, ax = plt.subplots(figsize=(3.3, 2.3), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(3.8, 2.6), constrained_layout=True)
+    fig.set_constrained_layout_pads(w_pad=0.10, h_pad=0.04)
     for ctrl in ("SafeRL", "UnconstrainedPPO"):
         if ctrl not in train or "viol_rate" not in train[ctrl]:
             continue
@@ -108,9 +109,9 @@ def fig_e1_training_violation(train: dict, path_pdf: str):
         x = np.arange(y.shape[1])
         _ci_band(ax, x, y, COLORS[ctrl], LABELS[ctrl])
     ax.axhline((1.0 - 0.95) * 100, color="k", linestyle=":", linewidth=0.7,
-               label=r"$1{-}\beta=5\%$ target")
+               label=r"$1{-}\beta=5\%$ reference")
     ax.set_xlabel("Training update")
-    ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (%)")
+    ax.set_ylabel("Loss-exceedance rate (%)")
     ax.set_ylim(bottom=0)
     ax.legend(loc="center right", frameon=False)
     ax.grid(True, alpha=0.3)
@@ -154,7 +155,7 @@ def fig_e2_final_ops(eval_json: dict, path_pdf: str):
         ax.set_xticks(range(len(ctrls)))
         ax.set_xticklabels([LABELS[c].replace(" (proposed)", "")
                             for c in ctrls], rotation=18, ha="right")
-        ax.set_ylabel(r"Loss-exceedance rate $\Pr\{\ell>\Gamma\}$ (%)")
+        ax.set_ylabel("Loss-exceedance rate (%)")
         ax.set_ylim(0, max(115, ax.get_ylim()[1]))
         ax.grid(True, axis="y", alpha=0.3)
 
