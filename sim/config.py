@@ -101,6 +101,22 @@ class AlgoCfg:
     q_safety_threshold_Mb: float = 50.0   # if total backlog > this, force max service
     lcb_kappa: float = 1.0       # conservative LCB factor: mu_LCB = mu_hat - kappa * sigma_hat
 
+    # Ablation knobs (negative = "active learning", non-negative = "frozen at this value").
+    fixed_lambda: float = -1.0   # if >= 0, freeze dual lambda at this value (no dual ascent)
+    fixed_tau: float = -1.0      # if >= 0, freeze CVaR threshold tau at this value (no tau-update)
+
+    # Cor. 2 / Prop. 1 verification knob.
+    # V is the energy weight in the actor cost  c_lambda = V * P_RAN + lam * g_tau.
+    # Default 1e-3 normalizes power (~1000W) to be commensurable with g_tau (~3-10).
+    # Sweeping V tests the [O(1/V), O(1)] asymptotic tradeoff of Corollary 2.
+    V_energy_weight: float = 1.0e-3
+
+    # Theorem 2 / Theorem 3 verification: diminishing Robbins-Monro stepsize schedule.
+    # When True, alpha_t/beta_t/gamma_t decay as t^{-exponent}; uncaps the dual too.
+    diminishing_schedule: bool = False
+    diminishing_alpha_exp: float = 0.55    # actor exponent (informational; actor LR kept constant in PPO)
+    diminishing_beta_exp:  float = 0.55    # dual+tau exponent; p in (0.5, 1] satisfies Robbins-Monro
+
     # Rollout sizing.
     rollout_slots: int = 256     # actor/critic update every this many env steps
     target_tau: float = 0.005    # soft-target update for critic baseline

@@ -102,7 +102,7 @@ def main():
                     marker="s", markersize=7, color="#d62728",
                     capsize=4, linewidth=1.6)
         ax.axhline(5.0, color="k", linestyle=":", linewidth=0.8,
-                   label=r"$1{-}\beta=5\%$")
+                   label=r"$1{-}\beta=5\%$ reference")
         ax.set_xlabel(r"Risk budget $\Gamma$")
         ax.set_ylabel("Loss-exceedance rate (%)")
         ax.legend(loc="upper right", frameon=False)

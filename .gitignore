@@ -34,6 +34,9 @@ sim/results/run.log
 sim/results/run_*.log
 sim/results/train.log
 sim/results/gamma_sweep.log
+sim/results/ablations.log
+sim/results/verification.log
+sim/results/critic_sweep.log
 
 # Python build artifacts
 __pycache__/

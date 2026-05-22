@@ -63,8 +63,10 @@ class SafeRLController:
         self.opt_critic = torch.optim.Adam(self.critic.parameters(),
                                             lr=cfg.algo.lr_critic)
 
-        self.lam = 0.0 if enforce_risk else 0.0
-        self.tau = cfg.algo.tau_init
+        self.lam = (cfg.algo.fixed_lambda if cfg.algo.fixed_lambda >= 0
+                    else 0.0)
+        self.tau = (cfg.algo.fixed_tau if cfg.algo.fixed_tau >= 0
+                    else cfg.algo.tau_init)
         self.z = 0.0
         self.t_slot = 0
         self.rng = np.random.default_rng(seed)
@@ -95,15 +97,24 @@ class SafeRLController:
         and dual lambda. Called once per step from the rollout loop."""
         cfg = self.cfg.algo
         t = max(self.t_slot, 1)
-        # Robbins-Monro decay
-        alpha_t = cfg.lr_tau / (1.0 + t * 1e-4)
-        beta_t = cfg.lr_dual / (1.0 + t * 1e-4)
+        if cfg.diminishing_schedule:
+            # Theory-aligned Robbins-Monro: alpha_t = c / (1+t)^p with
+            # beta exponent (slow timescale) > alpha exponent (faster).
+            # Verifies Theorem 2 hypotheses under uncapped dual.
+            alpha_t = cfg.lr_tau  / (1.0 + t) ** cfg.diminishing_beta_exp
+            beta_t  = cfg.lr_dual / (1.0 + t) ** cfg.diminishing_beta_exp
+        else:
+            # Practical (slow) Robbins-Monro used in the headline experiments.
+            alpha_t = cfg.lr_tau / (1.0 + t * 1e-4)
+            beta_t = cfg.lr_dual / (1.0 + t * 1e-4)
 
         # tau subgradient: 1 - (1-beta)^{-1} * 1{loss > tau}
-        ind = 1.0 if loss > self.tau else 0.0
-        g_grad = 1.0 - ind / (1.0 - cfg.beta)
-        self.tau = float(np.clip(self.tau - alpha_t * g_grad,
-                                  0.0, cfg.ell_max))
+        # Skip the update if tau is frozen for an ablation.
+        if cfg.fixed_tau < 0:
+            ind = 1.0 if loss > self.tau else 0.0
+            g_grad = 1.0 - ind / (1.0 - cfg.beta)
+            self.tau = float(np.clip(self.tau - alpha_t * g_grad,
+                                      0.0, cfg.ell_max))
 
         # g_tau = tau + (1-beta)^{-1} max(loss - tau, 0)
         g_tau = self.tau + max(loss - self.tau, 0.0) / (1.0 - cfg.beta)
@@ -112,7 +123,9 @@ class SafeRLController:
         self.z = max(self.z + g_tau - cfg.Gamma, 0.0)
 
         # Dual ascent on lambda (with cap and warmup).
-        if self.enforce_risk and self.t_slot >= cfg.risk_warmup_slots:
+        # Skip the ascent if lambda is frozen for an ablation.
+        if (cfg.fixed_lambda < 0 and self.enforce_risk
+                and self.t_slot >= cfg.risk_warmup_slots):
             new_lam = max(self.lam + beta_t * (g_tau - cfg.Gamma), 0.0)
             self.lam = float(min(new_lam, cfg.lam_max))
 
@@ -121,10 +134,9 @@ class SafeRLController:
 
     # -----------------------------------------------------------------
     def _augmented_cost(self, energy_W: float, g_tau: float) -> float:
-        # Normalize energy to comparable scale to risk term.
-        # energy ~ 200-1400 W; g_tau ~ 0-20 (after CVaR / ell_max normalization).
-        # Scale energy by 1/1000 so combined cost is in similar units.
-        return energy_W * 1e-3 + self.lam * g_tau
+        # c_lambda = V * P_RAN + lambda * g_tau. V_energy_weight defaults to 1e-3
+        # to normalize power (~1000 W) to commensurable scale with g_tau (~3-10).
+        return energy_W * self.cfg.algo.V_energy_weight + self.lam * g_tau
 
     # -----------------------------------------------------------------
     def collect_rollout(self, env: CellularEnv,

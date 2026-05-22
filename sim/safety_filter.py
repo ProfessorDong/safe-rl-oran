@@ -4,10 +4,11 @@ safety_filter.py
 Lyapunov-guided safety filter that projects the actor's proposed action
 onto a backlog-aware safe set.
 
-Idea: if total backlog exceeds q_safety_threshold_Mb, force every cell
-awake at maximum service rate (phi_b = 1.0). This guarantees negative
-drift outside a bounded region and matches the safety analysis in the
-paper's Theorem 1 (Foster-Lyapunov).
+Idea: if total backlog exceeds q_safety_threshold_Mb, force the
+most-backlogged half (floor(B/2)) of cells awake at maximum service
+rate (phi_b = 1.0). This guarantees aggregate negative drift outside
+a bounded region under the conditions of the paper's Corollary 1
+(vector-queue extension of Theorem 1).
 
 If the controller had access to a conservative service predictor
 (LCB), we could be smarter (project onto the smallest action set with
