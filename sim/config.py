@@ -125,6 +125,12 @@ class AlgoCfg:
     # Actor / critic.
     hidden: int = 64             # MLP hidden width (small; the state is low-dim)
     log_std_init: float = -0.5   # initial actor exploration scale (pre-sigmoid)
+    # Factored per-cell action: discrete sleep/active x continuous share.
+    # With the purely continuous sigmoid actor the sleep region phi < 0.05
+    # sits ~4.85 sigma out (~6e-7 per cell-slot), so the learner never
+    # explored cell sleep at all and was confined to throttling.
+    factored_action: bool = True
+    active_bias: float = 1.0     # initial logit bias toward "active"
     n_layers: int = 2            # MLP depth
     gamma_disc: float = 0.99     # discount factor for the cost MDP
     gae_lambda: float = 0.95     # GAE-lambda for advantage estimation
@@ -236,6 +242,12 @@ class SimCfg:
         if self.algo.dual_in_state:
             d += 2
         return d
+
+    @property
+    def raw_dim(self) -> int:
+        """Width of the stored policy-sample record used for the PPO ratio:
+        (z, raw) for the factored actor, raw alone otherwise."""
+        return 2 * self.topo.B if self.algo.factored_action else self.topo.B
 
     @property
     def action_dim(self) -> int:

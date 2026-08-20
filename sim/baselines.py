@@ -129,6 +129,96 @@ class ThresholdHeuristic:
         return _model_based_rollout(self, env, n_slots)
 
 
+class AlwaysOn:
+    """All cells awake at full resource share.
+
+    The maximum-service, maximum-energy reference. It is also the CVaR-optimal
+    policy in this model, so it fixes the right-hand end of the feasible range
+    for the risk budget Gamma: no policy can achieve a smaller CVaR, hence a
+    budget below its CVaR is infeasible by construction.
+    """
+    name = "AlwaysOn"
+
+    def __init__(self, cfg: SimCfg, **kwargs):
+        self.cfg = cfg
+
+    def reset(self, seed: int = 0):
+        pass
+
+    def act(self, state, q_phys, stochastic: bool = True):
+        a = np.ones(self.cfg.topo.B, dtype=np.float32)
+        return a, np.zeros_like(a), state, 0.0
+
+    def update_tau_z_lambda(self, loss: float):
+        return 0.0
+
+    def update_actor_critic(self, batch):
+        return {"actor_loss": 0.0, "critic_loss": 0.0, "lambda": 0.0,
+                "tau": 0.0, "z": 0.0}
+
+    def collect_rollout(self, env: CellularEnv, n_slots: int):
+        return _model_based_rollout(self, env, n_slots)
+
+
+class DriftPlusPenalty:
+    """Continuous drift-plus-penalty controller (no learning).
+
+    Per slot each cell requests exactly the share needed to drain its own
+    backlog, phi_b = clip(slack * q_b / mu_cap, phi_min, 1). This is the
+    interior solution of the per-cell drift-plus-penalty problem, as opposed
+    to the binary bang-bang rule used as the Lyapunov baseline in the
+    submitted version, which chattered at >5000 toggles/min because it could
+    only choose between full service and sleep. `slack` trades tail risk
+    against power and traces the controller's Pareto frontier.
+    """
+    name = "DriftPlusPenalty"
+
+    def __init__(self, cfg: SimCfg, slack: float = 1.0, phi_min: float = 0.05,
+                 **kwargs):
+        self.cfg = cfg
+        self.slack = slack
+        self.phi_min = phi_min
+
+    def reset(self, seed: int = 0):
+        pass
+
+    def act(self, state, q_phys, stochastic: bool = True):
+        mu_cap = self.cfg.chan.mu_max_mbps * self.cfg.dt_s
+        a = np.clip(self.slack * q_phys / max(mu_cap, 1e-9),
+                    self.phi_min, 1.0).astype(np.float32)
+        return a, np.zeros_like(a), state, 0.0
+
+    def update_tau_z_lambda(self, loss: float):
+        return 0.0
+
+    def update_actor_critic(self, batch):
+        return {"actor_loss": 0.0, "critic_loss": 0.0, "lambda": 0.0,
+                "tau": 0.0, "z": 0.0}
+
+    def collect_rollout(self, env: CellularEnv, n_slots: int):
+        return _model_based_rollout(self, env, n_slots)
+
+
+class SleepAwareDrift(DriftPlusPenalty):
+    """Drift-plus-penalty with a per-cell sleep threshold.
+
+    Extends DriftPlusPenalty by putting a cell to sleep when its backlog falls
+    below `q_sleep`, letting neighbouring cells absorb the load through the
+    coverage overlap. This is the strongest non-learning controller in the
+    comparison and the one a learned policy has to beat.
+    """
+    name = "SleepAwareDrift"
+
+    def __init__(self, cfg: SimCfg, q_sleep_Mb: float = 0.05, **kwargs):
+        super().__init__(cfg, **kwargs)
+        self.q_sleep = q_sleep_Mb
+
+    def act(self, state, q_phys, stochastic: bool = True):
+        a, r, s, lp = super().act(state, q_phys, stochastic)
+        a = np.where(q_phys < self.q_sleep, 0.0, a).astype(np.float32)
+        return a, r, s, lp
+
+
 def make_baseline(name: str, cfg: SimCfg, seed: int) -> object:
     """Factory."""
     if name == "SafeRL":
@@ -143,4 +233,14 @@ def make_baseline(name: str, cfg: SimCfg, seed: int) -> object:
         return LyapunovOnly(cfg)
     if name == "Threshold":
         return ThresholdHeuristic(cfg)
+    if name == "AlwaysOn":
+        return AlwaysOn(cfg)
+    if name.startswith("DriftPlusPenalty"):
+        # "DriftPlusPenalty" or "DriftPlusPenalty:<slack>"
+        slack = float(name.split(":")[1]) if ":" in name else 1.0
+        return DriftPlusPenalty(cfg, slack=slack)
+    if name.startswith("SleepAwareDrift"):
+        # "SleepAwareDrift" or "SleepAwareDrift:<q_sleep_Mb>"
+        qs = float(name.split(":")[1]) if ":" in name else 0.05
+        return SleepAwareDrift(cfg, q_sleep_Mb=qs)
     raise ValueError(f"unknown baseline: {name}")

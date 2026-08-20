@@ -21,7 +21,7 @@ import torch
 import torch.nn.functional as F
 
 from .config import SimCfg
-from .networks import Actor, Critic
+from .networks import Actor, FactoredActor, Critic
 from .safety_filter import safe_project
 from .env import CellularEnv
 
@@ -49,10 +49,19 @@ class SafeRLController:
         torch.manual_seed(seed)
         np.random.seed(seed)
 
-        self.actor = Actor(cfg.state_dim, cfg.action_dim,
-                           hidden=cfg.algo.hidden,
-                           n_layers=cfg.algo.n_layers,
-                           log_std_init=cfg.algo.log_std_init).to(device)
+        if cfg.algo.factored_action:
+            from .env import EPS_SLEEP
+            self.actor = FactoredActor(cfg.state_dim, cfg.action_dim,
+                                       hidden=cfg.algo.hidden,
+                                       n_layers=cfg.algo.n_layers,
+                                       log_std_init=cfg.algo.log_std_init,
+                                       eps_sleep=EPS_SLEEP,
+                                       active_bias=cfg.algo.active_bias).to(device)
+        else:
+            self.actor = Actor(cfg.state_dim, cfg.action_dim,
+                               hidden=cfg.algo.hidden,
+                               n_layers=cfg.algo.n_layers,
+                               log_std_init=cfg.algo.log_std_init).to(device)
         self.critic = Critic(cfg.state_dim, hidden=cfg.algo.hidden,
                              n_layers=cfg.algo.n_layers).to(device)
         self.critic_target = Critic(cfg.state_dim, hidden=cfg.algo.hidden,
@@ -124,6 +133,11 @@ class SafeRLController:
             a_np = a.cpu().numpy().squeeze(0).astype(np.float32)
             raw_np = raw.cpu().numpy().squeeze(0).astype(np.float32)
             lp_v = float(lp.cpu().numpy().item())
+        elif hasattr(self.actor, "deterministic"):
+            a_t = self.actor.deterministic(s)
+            a_np = a_t.cpu().numpy().squeeze(0).astype(np.float32)
+            raw_np = np.zeros(self.cfg.raw_dim, dtype=np.float32)
+            lp_v = 0.0
         else:
             mean_pre, _ = self.actor(s)
             raw_np = mean_pre.cpu().numpy().squeeze(0).astype(np.float32)
@@ -212,7 +226,7 @@ class SafeRLController:
         """One rollout of length n_slots starting from env's current state."""
         states = np.zeros((n_slots, self.cfg.state_dim), dtype=np.float32)
         actions = np.zeros((n_slots, self.cfg.action_dim), dtype=np.float32)
-        raws = np.zeros((n_slots, self.cfg.action_dim), dtype=np.float32)
+        raws = np.zeros((n_slots, self.cfg.raw_dim), dtype=np.float32)
         log_probs = np.zeros(n_slots, dtype=np.float32)
         costs = np.zeros(n_slots, dtype=np.float32)
         costs_e = np.zeros(n_slots, dtype=np.float32)
