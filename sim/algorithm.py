@@ -51,7 +51,8 @@ class SafeRLController:
 
         self.actor = Actor(cfg.state_dim, cfg.action_dim,
                            hidden=cfg.algo.hidden,
-                           n_layers=cfg.algo.n_layers).to(device)
+                           n_layers=cfg.algo.n_layers,
+                           log_std_init=cfg.algo.log_std_init).to(device)
         self.critic = Critic(cfg.state_dim, hidden=cfg.algo.hidden,
                              n_layers=cfg.algo.n_layers).to(device)
         self.critic_target = Critic(cfg.state_dim, hidden=cfg.algo.hidden,
@@ -63,8 +64,28 @@ class SafeRLController:
         self.opt_critic = torch.optim.Adam(self.critic.parameters(),
                                             lr=cfg.algo.lr_critic)
 
+        # Risk critic. `self.critic` regresses the ENERGY cost only when
+        # two_critics is on, and the augmented cost c_lambda otherwise (the
+        # submitted behaviour). Splitting them keeps each regression target
+        # stationary in lambda.
+        self.two_critics = bool(cfg.algo.two_critics)
+        if self.two_critics:
+            self.critic_r = Critic(cfg.state_dim, hidden=cfg.algo.hidden,
+                                   n_layers=cfg.algo.n_layers).to(device)
+            self.critic_r_target = Critic(cfg.state_dim, hidden=cfg.algo.hidden,
+                                          n_layers=cfg.algo.n_layers).to(device)
+            self.critic_r_target.load_state_dict(self.critic_r.state_dict())
+            self.opt_critic_r = torch.optim.Adam(self.critic_r.parameters(),
+                                                 lr=cfg.algo.lr_critic)
+        else:
+            self.critic_r = None
+
         self.lam = (cfg.algo.fixed_lambda if cfg.algo.fixed_lambda >= 0
                     else 0.0)
+        # PID dual-controller state (Stooke et al., ICML 2020, Alg. 2).
+        self.use_pid = bool(cfg.algo.use_pid_dual) and cfg.algo.fixed_lambda < 0
+        self._pid_I = 0.0
+        self._pid_prev_delta = 0.0
         self.tau = (cfg.algo.fixed_tau if cfg.algo.fixed_tau >= 0
                     else cfg.algo.tau_init)
         self.z = 0.0
@@ -72,10 +93,31 @@ class SafeRLController:
         self.rng = np.random.default_rng(seed)
 
     # -----------------------------------------------------------------
+    def augment(self, env_state: np.ndarray) -> np.ndarray:
+        """Append the controller's own (lambda, tau) to the environment
+        observation.
+
+        The augmented cost c_lambda = V*P + lambda*g_tau depends on lambda and
+        tau, so a policy/value function conditioned only on the environment
+        state is solving a non-stationary problem: the same observation maps
+        to different costs at different points in training. Feeding the dual
+        state to the networks restores stationarity of the joint recursion
+        and is what makes the primal-dual iteration well posed.
+        """
+        if not self.cfg.algo.dual_in_state:
+            return env_state.astype(np.float32)
+        extra = np.array([
+            self.lam / max(self.cfg.algo.lam_max, 1e-6),
+            self.tau / max(self.cfg.algo.ell_max, 1e-6),
+        ], dtype=np.float32)
+        return np.concatenate([env_state, extra]).astype(np.float32)
+
+    # -----------------------------------------------------------------
     @torch.no_grad()
     def act(self, state: np.ndarray, q_phys: np.ndarray,
             stochastic: bool = True) -> Tuple[np.ndarray, np.ndarray,
                                               np.ndarray, float]:
+        state = self.augment(state)
         s = torch.from_numpy(state).float().to(self.device).unsqueeze(0)
         if stochastic:
             a, lp, raw = self.actor.sample(s)
@@ -123,14 +165,40 @@ class SafeRLController:
         self.z = max(self.z + g_tau - cfg.Gamma, 0.0)
 
         # Dual ascent on lambda (with cap and warmup).
-        # Skip the ascent if lambda is frozen for an ablation.
-        if (cfg.fixed_lambda < 0 and self.enforce_risk
+        # Skip the ascent if lambda is frozen for an ablation, and skip the
+        # per-slot path entirely when the PID controller runs per rollout.
+        pid_deferred = self.use_pid and cfg.pid_per_rollout
+        if (cfg.fixed_lambda < 0 and self.enforce_risk and not pid_deferred
                 and self.t_slot >= cfg.risk_warmup_slots):
-            new_lam = max(self.lam + beta_t * (g_tau - cfg.Gamma), 0.0)
-            self.lam = float(min(new_lam, cfg.lam_max))
+            if self.use_pid:
+                self.lam = self._pid_update(g_tau)
+            else:
+                new_lam = max(self.lam + beta_t * (g_tau - cfg.Gamma), 0.0)
+                self.lam = float(min(new_lam, cfg.lam_max))
 
         self.t_slot += 1
         return g_tau
+
+    # -----------------------------------------------------------------
+    def _pid_update(self, jc: float) -> float:
+        """PID-controlled Lagrange multiplier (Stooke et al., ICML 2020).
+
+        `jc` is the measured constraint quantity (here the mean risk cost
+        g_tau over the control interval) and the setpoint is Gamma. Unlike
+        the integral-only rule, lambda is recomputed from the current error
+        rather than accumulated, so a persistent violation no longer drives
+        it monotonically into the cap.
+        """
+        cfg = self.cfg.algo
+        delta = jc - cfg.Gamma
+        # Derivative term is rectified so it resists increases in the
+        # constraint but does not fight decreases.
+        d_term = max(delta - self._pid_prev_delta, 0.0)
+        self._pid_I = max(self._pid_I + delta, 0.0)
+        lam = (cfg.pid_kp * delta + cfg.pid_ki * self._pid_I
+               + cfg.pid_kd * d_term)
+        self._pid_prev_delta = delta
+        return float(min(max(lam, 0.0), cfg.lam_max))
 
     # -----------------------------------------------------------------
     def _augmented_cost(self, energy_W: float, g_tau: float) -> float:
@@ -147,6 +215,9 @@ class SafeRLController:
         raws = np.zeros((n_slots, self.cfg.action_dim), dtype=np.float32)
         log_probs = np.zeros(n_slots, dtype=np.float32)
         costs = np.zeros(n_slots, dtype=np.float32)
+        costs_e = np.zeros(n_slots, dtype=np.float32)
+        costs_r = np.zeros(n_slots, dtype=np.float32)
+        lams = np.zeros(n_slots, dtype=np.float32)
         next_states = np.zeros((n_slots, self.cfg.state_dim), dtype=np.float32)
         dones = np.zeros(n_slots, dtype=np.float32)
         info = {"energy": [], "loss": [], "g_tau": [], "viol": []}
@@ -154,16 +225,20 @@ class SafeRLController:
         s = env.state()
         for k in range(n_slots):
             a, raw, s_in, lp = self.act(s, env.q, stochastic=True)
+            lam_k = self.lam            # dual in force when the action was taken
             s_next, cost, done = env.step(a)
             g_tau = self.update_tau_z_lambda(cost["loss"])
             augmented = self._augmented_cost(cost["energy_W"], g_tau)
 
-            states[k] = s
+            states[k] = s_in            # augmented observation actually seen
             actions[k] = a
             raws[k] = raw
             log_probs[k] = lp
             costs[k] = augmented
-            next_states[k] = s_next
+            costs_e[k] = cost["energy_W"] * self.cfg.algo.V_energy_weight
+            costs_r[k] = g_tau
+            lams[k] = lam_k
+            next_states[k] = self.augment(s_next)
             dones[k] = float(done)
             info["energy"].append(cost["energy_W"])
             info["loss"].append(cost["loss"])
@@ -179,6 +254,7 @@ class SafeRLController:
         return {
             "states": states, "actions": actions, "raws": raws,
             "log_probs": log_probs, "costs": costs,
+            "costs_e": costs_e, "costs_r": costs_r, "lams": lams,
             "next_states": next_states, "dones": dones,
             "energy": np.array(info["energy"], dtype=np.float32),
             "loss": np.array(info["loss"], dtype=np.float32),
@@ -189,6 +265,13 @@ class SafeRLController:
     # -----------------------------------------------------------------
     def update_actor_critic(self, batch: Dict[str, np.ndarray]) -> Dict[str, float]:
         cfg = self.cfg.algo
+        # Per-rollout PID dual control. Stooke et al. apply feedback control
+        # at the RL-iteration rate using a batch estimate of the constraint,
+        # which is far less noisy than a single slot's realization.
+        if (self.use_pid and cfg.pid_per_rollout and self.enforce_risk
+                and cfg.fixed_lambda < 0
+                and self.t_slot >= cfg.risk_warmup_slots):
+            self.lam = self._pid_update(float(np.mean(batch["g_tau"])))
         states = torch.from_numpy(batch["states"]).to(self.device)
         next_states = torch.from_numpy(batch["next_states"]).to(self.device)
         actions = torch.from_numpy(batch["actions"]).to(self.device)
@@ -197,22 +280,46 @@ class SafeRLController:
         costs = torch.from_numpy(batch["costs"]).to(self.device)
         dones = torch.from_numpy(batch["dones"]).to(self.device)
 
-        # GAE advantages (cost-style: lower V means better state).
-        with torch.no_grad():
-            V_now = self.critic(states)
-            V_next = self.critic_target(next_states)
-            # For a COST MDP (we are minimizing), advantage:
-            #   A = c + gamma V(next) - V(now)
-            # Lower A means action led to lower-than-expected cost (better).
-            deltas = costs + cfg.gamma_disc * (1 - dones) * V_next - V_now
-            advs = torch.zeros_like(deltas)
+        def _gae(cost_vec, critic, critic_target):
+            """GAE for a cost MDP: A = c + gamma V(next) - V(now), lower is
+            better. Returns (advantage, bootstrapped return)."""
+            V_now = critic(states)
+            V_next = critic_target(next_states)
+            deltas = cost_vec + cfg.gamma_disc * (1 - dones) * V_next - V_now
+            adv = torch.zeros_like(deltas)
             last = 0.0
             for k in reversed(range(len(deltas))):
                 last = deltas[k] + cfg.gamma_disc * cfg.gae_lambda * \
                     (1 - dones[k]) * last
-                advs[k] = last
-            returns = advs + V_now
-            advs = (advs - advs.mean()) / (advs.std() + 1e-6)
+                adv[k] = last
+            return adv, adv + V_now
+
+        def _std(x):
+            return (x - x.mean()) / (x.std() + 1e-6)
+
+        with torch.no_grad():
+            if self.two_critics:
+                costs_e = torch.from_numpy(batch["costs_e"]).to(self.device)
+                costs_r = torch.from_numpy(batch["costs_r"]).to(self.device)
+                lams = torch.from_numpy(batch["lams"]).to(self.device)
+                adv_e, returns_e = _gae(costs_e, self.critic,
+                                        self.critic_target)
+                adv_r, returns_r = _gae(costs_r, self.critic_r,
+                                        self.critic_r_target)
+                # Standardize each channel FIRST, then mix with the dual.
+                # Standardizing the mixture instead (the submitted code path)
+                # divides out lambda, so the constraint loses all influence on
+                # the actor no matter how large the dual grows. The 1/(1+lam)
+                # normalization keeps the mixture bounded while sweeping the
+                # objective from pure energy (lam=0) to pure risk (lam -> inf).
+                w = lams / (1.0 + lams)
+                advs = (1.0 - w) * _std(adv_e) + w * _std(adv_r)
+                advs = _std(advs)
+                returns = returns_e
+            else:
+                adv, returns = _gae(costs, self.critic, self.critic_target)
+                advs = _std(adv)
+                returns_r = None
 
         # PPO update over a few epochs of mini-batches.
         n = len(states)
@@ -252,15 +359,29 @@ class SafeRLController:
                 torch.nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
                 self.opt_critic.step()
 
+                if self.two_critics:
+                    V_r_pred = self.critic_r(s_b)
+                    critic_r_loss = F.mse_loss(V_r_pred, returns_r[idx])
+                    self.opt_critic_r.zero_grad()
+                    critic_r_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(
+                        self.critic_r.parameters(), 1.0)
+                    self.opt_critic_r.step()
+
                 actor_losses.append(float(actor_loss.detach().cpu()))
                 critic_losses.append(float(critic_loss.detach().cpu()))
 
-        # Soft-update target critic.
+        # Soft-update target critics.
         with torch.no_grad():
             for p, p_t in zip(self.critic.parameters(),
                                self.critic_target.parameters()):
                 p_t.data.mul_(1 - cfg.target_tau)
                 p_t.data.add_(p.data * cfg.target_tau)
+            if self.two_critics:
+                for p, p_t in zip(self.critic_r.parameters(),
+                                   self.critic_r_target.parameters()):
+                    p_t.data.mul_(1 - cfg.target_tau)
+                    p_t.data.add_(p.data * cfg.target_tau)
 
         return {
             "actor_loss": float(np.mean(actor_losses)),

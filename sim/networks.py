@@ -34,11 +34,14 @@ class Actor(nn.Module):
     env is sigmoid(raw_action) elementwise, in [0, 1]."""
 
     def __init__(self, state_dim: int, action_dim: int, hidden: int = 64,
-                 n_layers: int = 2):
+                 n_layers: int = 2, log_std_init: float = -0.5):
         super().__init__()
         self.net = _mlp(state_dim, action_dim, hidden, n_layers)
-        # Per-dim log-std as a learnable parameter, init small.
-        self.log_std = nn.Parameter(torch.full((action_dim,), -0.5))
+        # Per-dim log-std as a learnable parameter. The initial scale governs
+        # how much pre-sigmoid exploration noise the actor injects; at -0.5
+        # (std ~0.61) the noise is large enough to wash out state-dependence
+        # early in training, so it is exposed for tuning.
+        self.log_std = nn.Parameter(torch.full((action_dim,), log_std_init))
 
     def forward(self, state: torch.Tensor):
         """Returns (mean_pre, log_std)."""

@@ -21,6 +21,25 @@ class TopologyCfg:
     B: int = 7                   # number of cells in cluster
     isd_m: float = 250.0         # inter-site distance, m (urban dense, slightly larger than Paper 3)
 
+    # --- inter-cell coverage overlap (R1 revision) ------------------------
+    # The submitted model had B independent per-cell queues with no coupling,
+    # so a sleeping cell simply starved its own users, cell sleep was never
+    # worthwhile, and the optimal policy factorized per cell. That removes
+    # the very mechanism the O-RAN "Carrier and Cell Switch Off/On" use case
+    # relies on: when a cell sleeps, neighbouring cells with overlapping
+    # coverage absorb its traffic.
+    enable_offload: bool = True
+    # Offloaded traffic is carried at lower spectral efficiency because the
+    # UE is served by a farther cell. A UE at its own cell edge that is
+    # picked up by a neighbour sits at roughly the ISD rather than the cell
+    # radius; under a 3GPP UMa exponent this costs a factor of order 0.5-0.7
+    # in achievable rate, so offloaded bits consume 1/eta times the resources.
+    offload_efficiency: float = 0.6
+    # Fraction of a cell's traffic that lies in the overlap region and is
+    # therefore reachable by a neighbour at all. Traffic outside the overlap
+    # is stranded when the cell sleeps and stays in its own queue.
+    overlap_fraction: float = 0.8
+
 
 # ========== time ==========
 @dataclass
@@ -48,9 +67,31 @@ class EnergyCfg:
     p_on_W: float = 130.0        # active baseline (RF + BB)
     p_slp_W: float = 8.0         # deep sleep
     p_dyn_W: float = 100.0       # dynamic component, scales with resource share
-    p_sw_W: float = 5.0          # switching penalty per toggle
     min_on_slots: int = 5
     min_off_slots: int = 5
+
+    # --- sleep-mode transition cost (R1 revision) -------------------------
+    # Calibrated to the advanced-sleep-mode (ASM) measurements of Salem et
+    # al. (VTC-Fall 2017, Table II) rather than the placeholder 5 W used in
+    # the submitted version. Their 3-sector 2x2 MIMO site draws 750 W at full
+    # load, 328 W idle and 28.5 W in SM3; per sector that is ~250 W / ~109 W
+    # / ~9.5 W, which brackets (p_on + p_dyn) / p_on / p_slp here, so the
+    # steady-state levels were already sector-calibrated.
+    #
+    # The transition was not. At a 10 ms slot the relevant depth is SM3
+    # (10 ms transition time), split by Salem et al. into a deactivation
+    # slope and an activation slope of half the transition each. During
+    # deactivation the radio still draws active power; during activation it
+    # draws sleep power but cannot carry data. Charging the excess
+    # deactivation energy (p_on - p_slp) * 5 ms = 0.61 J to the sleep-entry
+    # toggle and amortizing over the on->off->on pair gives
+    #   p_sw ~ 0.61 J / 2 / 10 ms ~ 30 W per toggle,
+    # a 6x increase over the placeholder. `wake_service_frac` charges the
+    # other half of the cost: a cell that wakes this slot spends the 5 ms
+    # activation slope unable to serve, so it delivers half a slot of data.
+    p_sw_W: float = 30.0
+    wake_service_frac: float = 0.5   # served fraction of a slot on wake-up
+    asm_transition_ms: float = 10.0  # SM3 transition time (informational)
 
 
 # ========== arrivals ==========
@@ -83,6 +124,7 @@ class AlgoCfg:
 
     # Actor / critic.
     hidden: int = 64             # MLP hidden width (small; the state is low-dim)
+    log_std_init: float = -0.5   # initial actor exploration scale (pre-sigmoid)
     n_layers: int = 2            # MLP depth
     gamma_disc: float = 0.99     # discount factor for the cost MDP
     gae_lambda: float = 0.95     # GAE-lambda for advantage estimation
@@ -121,6 +163,40 @@ class AlgoCfg:
     rollout_slots: int = 256     # actor/critic update every this many env steps
     target_tau: float = 0.005    # soft-target update for critic baseline
 
+    # --- R1 revision: primal-dual conditioning fixes -----------------------
+    # Separate energy and risk critics. A single critic on c_lambda has to
+    # represent a value function whose SCALE moves with lambda, which makes
+    # the regression target non-stationary and destroys the advantage
+    # estimates once the dual grows. Two critics on the (fixed) energy and
+    # risk costs are each stationary; the dual then only re-weights their
+    # advantages. Section IV-B of the submitted paper already flagged this
+    # variant; the revision adopts it as the default.
+    two_critics: bool = True
+    # Dual-conditioned policy: append (lambda, tau) to the actor/critic
+    # observation. Without this the cost is non-stationary from the network's
+    # point of view (Reviewer 3, point 5).
+    dual_in_state: bool = True
+    # Expose the per-cell sleep state and min-dwell counter, which are part
+    # of the true Markov state (they gate the admissible action through the
+    # hysteresis) but were hidden from the actor in the submitted version.
+    sleep_state_in_obs: bool = True
+
+    # PID dual control (Stooke, Achiam & Abbeel, ICML 2020, Alg. 2).
+    # The submitted update lam <- [lam + beta*(g_tau - Gamma)]_+ is pure
+    # INTEGRAL control, which is exactly why lam wound up to lam_max and
+    # stayed pinned there: an integral controller facing a persistent
+    # positive error accumulates without bound. PID recomputes the multiplier
+    # from the current error each iteration,
+    #     lam = [K_P * delta + K_I * I + K_D * (delta - delta_prev)_+]_+ ,
+    # so the proportional term responds immediately, the derivative term acts
+    # before an overshoot, and the integral term still removes steady-state
+    # error. Setting K_P = K_D = 0 recovers the submitted behaviour.
+    use_pid_dual: bool = True
+    pid_kp: float = 1.0
+    pid_ki: float = 3e-3         # matches the submitted lr_dual
+    pid_kd: float = 2.0
+    pid_per_rollout: bool = True  # control at update rate, not per slot
+
 
 # ========== top-level bundle ==========
 @dataclass
@@ -140,9 +216,26 @@ class SimCfg:
         return self.time.dt_ms * 1e-3
 
     @property
+    def env_state_dim(self) -> int:
+        """Observation emitted by the environment.
+
+        Base: per-cell queue (B) + recent service rate (B) + time-of-day (2).
+        With `sleep_state_in_obs`, adds per-cell sleep indicator (B) and
+        normalized min-dwell counter (B), which complete the Markov state.
+        """
+        d = 2 * self.topo.B + 2
+        if self.algo.sleep_state_in_obs:
+            d += 2 * self.topo.B
+        return d
+
+    @property
     def state_dim(self) -> int:
-        # per-cell queue (B) + recent service rate (B) + time-of-day cos/sin (2)
-        return 2 * self.topo.B + 2
+        """Full network input: environment observation plus, when
+        `dual_in_state` is set, the controller's own (lambda, tau)."""
+        d = self.env_state_dim
+        if self.algo.dual_in_state:
+            d += 2
+        return d
 
     @property
     def action_dim(self) -> int:

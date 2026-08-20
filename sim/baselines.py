@@ -66,7 +66,8 @@ def _model_based_rollout(ctl, env, n_slots: int):
     Threshold). The controller's act() is called every slot; no parameters
     are updated."""
     cfg = ctl.cfg
-    states = np.zeros((n_slots, cfg.state_dim), dtype=np.float32)
+    # Non-learning controllers consume the raw environment observation.
+    states = np.zeros((n_slots, cfg.env_state_dim), dtype=np.float32)
     actions = np.zeros((n_slots, cfg.action_dim), dtype=np.float32)
     energy = np.zeros(n_slots, dtype=np.float32)
     loss = np.zeros(n_slots, dtype=np.float32)

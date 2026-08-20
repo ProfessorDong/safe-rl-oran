@@ -58,3 +58,6 @@ Thumbs.db
 
 # LaTeX intermediates from figure subdirectories
 figures/
+
+# Reference PDFs (not redistributable)
+refs/
