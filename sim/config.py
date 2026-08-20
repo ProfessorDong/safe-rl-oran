@@ -146,8 +146,18 @@ class AlgoCfg:
     tau_init: float = 0.5
 
     # Safety filter (Lyapunov-guided).
-    q_safety_threshold_Mb: float = 50.0   # if total backlog > this, force max service
+    # `lcb` is the filter the theory specifies (Eq. 9-10): per-cell projection
+    # onto {a : mu_LCB(x,a) >= a_hat + delta} whenever q_b >= q0_cell.
+    # `aggregate` is the coarse top-half-backlog rule of the submitted
+    # version, retained for the comparison Reviewer 3 asked for.
+    safety_filter_kind: str = "lcb"       # "lcb" | "aggregate" | "none"
+    q_safety_threshold_Mb: float = 50.0   # aggregate rule: cluster trigger
+    q0_cell_Mb: float = 1.0               # lcb rule: per-cell activation q0
+    delta_margin_Mb: float = 0.02         # lcb rule: drift margin delta
     lcb_kappa: float = 1.0       # conservative LCB factor: mu_LCB = mu_hat - kappa * sigma_hat
+    # Service-predictor error, swept for the robustness study (R1.3, R2.2).
+    pred_bias: float = 0.0       # >0 = optimistic predictor (overestimates service)
+    pred_scale: float = 1.0      # scaling on the predicted uncertainty
 
     # Ablation knobs (negative = "active learning", non-negative = "frozen at this value").
     fixed_lambda: float = -1.0   # if >= 0, freeze dual lambda at this value (no dual ascent)

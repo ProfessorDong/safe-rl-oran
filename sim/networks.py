@@ -65,12 +65,22 @@ class Actor(nn.Module):
     def log_prob(self, state: torch.Tensor, action: torch.Tensor,
                  raw: torch.Tensor) -> torch.Tensor:
         """Re-evaluate log-prob of a previously-sampled action+raw under the
-        current policy. Used for PPO ratio computation."""
+        current policy. Used for PPO ratio computation.
+
+        The change-of-variable Jacobian is evaluated at sigmoid(raw), the
+        PROPOSED action, not at `action`, which may have been modified by the
+        safety filter. Using the executed action here makes this term
+        disagree with the one recorded at sampling time; once the filter fires
+        often the PPO ratio blows up and training diverges outright. Scoring
+        the proposal is also the estimator the analysis assumes, since the
+        projection is treated as part of the environment.
+        """
         mean_pre, log_std = self.forward(state)
         std = log_std.exp()
         normal = torch.distributions.Normal(mean_pre, std)
         lp = normal.log_prob(raw).sum(-1)
-        lp = lp - (action * (1 - action) + 1e-8).log().sum(-1)
+        s = torch.sigmoid(raw)
+        lp = lp - (s * (1 - s) + 1e-8).log().sum(-1)
         return lp
 
 

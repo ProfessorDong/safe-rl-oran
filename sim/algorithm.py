@@ -22,7 +22,7 @@ import torch.nn.functional as F
 
 from .config import SimCfg
 from .networks import Actor, FactoredActor, Critic
-from .safety_filter import safe_project
+from .safety_filter import safe_project, lcb_project
 from .env import CellularEnv
 
 
@@ -100,6 +100,29 @@ class SafeRLController:
         self.z = 0.0
         self.t_slot = 0
         self.rng = np.random.default_rng(seed)
+        # Service-predictor context for the LCB safety filter. a_hat is an
+        # EWMA of observed per-cell arrivals, so the filter uses only causal
+        # information rather than the episode-average arrival rate.
+        self._chan_mean = 1.0
+        self._chan_std = 0.0
+        self._a_hat = np.full(cfg.topo.B, cfg.arr.base_rate_Mb_per_slot,
+                              dtype=np.float32)
+        self._a_ewma = 0.01
+
+    # -----------------------------------------------------------------
+    def bind(self, env) -> None:
+        """Attach channel statistics used by the LCB service predictor."""
+        pool = np.asarray(env.channel_pool, dtype=np.float64)
+        self._chan_mean = float(pool.mean())
+        self._chan_std = float(pool.std())
+
+    def observe(self, cost: dict) -> None:
+        """Update the causal arrival-rate estimate from an executed slot."""
+        a_vec = cost.get("a_vec")
+        if a_vec is not None:
+            r = self._a_ewma
+            self._a_hat = ((1.0 - r) * self._a_hat + r * np.asarray(a_vec)
+                           ).astype(np.float32)
 
     # -----------------------------------------------------------------
     def augment(self, env_state: np.ndarray) -> np.ndarray:
@@ -144,7 +167,12 @@ class SafeRLController:
             a_np = (1.0 / (1.0 + np.exp(-raw_np))).astype(np.float32)
             lp_v = 0.0
         if self.use_safety_filter:
-            a_np = safe_project(a_np, q_phys, self.cfg)
+            kind = getattr(self.cfg.algo, "safety_filter_kind", "aggregate")
+            if kind == "lcb":
+                a_np = lcb_project(a_np, q_phys, self._a_hat, self.cfg,
+                                   self._chan_mean, self._chan_std)
+            elif kind == "aggregate":
+                a_np = safe_project(a_np, q_phys, self.cfg)
         return a_np, raw_np, state, lp_v
 
     # -----------------------------------------------------------------
@@ -236,11 +264,13 @@ class SafeRLController:
         dones = np.zeros(n_slots, dtype=np.float32)
         info = {"energy": [], "loss": [], "g_tau": [], "viol": []}
 
+        self.bind(env)
         s = env.state()
         for k in range(n_slots):
             a, raw, s_in, lp = self.act(s, env.q, stochastic=True)
             lam_k = self.lam            # dual in force when the action was taken
             s_next, cost, done = env.step(a)
+            self.observe(cost)
             g_tau = self.update_tau_z_lambda(cost["loss"])
             augmented = self._augmented_cost(cost["energy_W"], g_tau)
 

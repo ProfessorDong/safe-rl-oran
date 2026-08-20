@@ -249,6 +249,7 @@ class CellularEnv:
             "q_total_Mb": float(self.q.sum()),
             "n_awake": int(s_t.sum()),
             "n_toggles": int(toggled.sum()),
+            "a_vec": a_t.astype(np.float32),
             "offloaded_Mb": offloaded_Mb,
             "stranded_Mb": stranded_Mb,
         }

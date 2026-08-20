@@ -129,6 +129,43 @@ class ThresholdHeuristic:
         return _model_based_rollout(self, env, n_slots)
 
 
+def run_episode(ctl, env: CellularEnv, cfg: SimCfg, seed: int,
+                stochastic: bool = False) -> dict:
+    """Evaluate any controller for one full episode.
+
+    Shared by every experiment so that learned and non-learning controllers
+    are measured through identical code. Handles the optional `bind`/`observe`
+    hooks that the LCB safety filter needs for its causal channel and
+    arrival-rate estimates.
+    """
+    from .metrics import summarize_episode
+    if hasattr(ctl, "bind"):
+        ctl.bind(env)
+    if hasattr(ctl, "reset"):
+        ctl.reset(seed)
+    s = env.reset(seed=seed)
+    P, L, Q, A, AW = [], [], [], [], []
+    tog = 0
+    off = strand = 0.0
+    done = False
+    while not done:
+        a, _, _, _ = ctl.act(s, env.q, stochastic=stochastic)
+        s, c, done = env.step(a)
+        if hasattr(ctl, "observe"):
+            ctl.observe(c)
+        P.append(c["energy_W"]); L.append(c["loss"])
+        Q.append(c["q_total_Mb"]); A.append(c["arrived_Mb"])
+        AW.append(c["n_awake"]); tog += c["n_toggles"]
+        off += c.get("offloaded_Mb", 0.0); strand += c.get("stranded_Mb", 0.0)
+    m = summarize_episode(np.array(P), np.array(L), np.array(Q), np.array(A),
+                          toggles=tog, beta=cfg.algo.beta,
+                          Gamma=cfg.algo.Gamma, dt_s=cfg.dt_s)
+    m["awake_mean"] = float(np.mean(AW))
+    m["offload_pct"] = 100.0 * off / max(sum(A), 1e-9)
+    m["stranded_pct"] = 100.0 * strand / max(sum(A), 1e-9)
+    return m
+
+
 class AlwaysOn:
     """All cells awake at full resource share.
 
