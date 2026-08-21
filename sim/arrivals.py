@@ -116,9 +116,16 @@ def _try_load_c2tm(csv_path: str, B: int) -> np.ndarray | None:
 
 def load_profile(cfg: SimCfg, rng: np.random.Generator) -> Tuple[np.ndarray, str]:
     """Return (B, 24) per-cell hourly arrival-rate multiplier profile and a
-    source tag ('shanghai', 'c2tm', or 'synthetic')."""
+    source tag ('shanghai', 'c2tm', or 'synthetic').
+
+    The cache file is keyed by cluster size. It previously was not, so a run
+    with a different B would overwrite the shared cache and every later run
+    would silently fall through to a different data source: the scalability
+    sweep (B = 19, 37, 61) poisoned the B = 7 cache used by every other
+    experiment. Keying by B makes cross-experiment contamination impossible.
+    """
     B = cfg.topo.B
-    cache = os.path.join(cfg.data_dir, CACHE_NAME)
+    cache = os.path.join(cfg.data_dir, f"arrivals_cache_B{B}.npz")
     if os.path.exists(cache):
         try:
             d = np.load(cache, allow_pickle=False)
@@ -143,6 +150,12 @@ def load_profile(cfg: SimCfg, rng: np.random.Generator) -> Tuple[np.ndarray, str
         np.savez(cache, profile=real, source=np.array("c2tm"))
         return real, "c2tm"
 
+    if getattr(cfg, "require_real_data", False):
+        raise RuntimeError(
+            f"require_real_data is set but no real arrival trace could be "
+            f"loaded for B={B} (looked for Shanghai Telecom under "
+            f"{sh_dir} and C2TM under {c2tm_path}). Refusing to fall back to "
+            f"a synthetic profile silently.")
     syn = _calibrated_synthetic_profile(B, rng)
     os.makedirs(cfg.data_dir, exist_ok=True)
     np.savez(cache, profile=syn, source=np.array("synthetic"))

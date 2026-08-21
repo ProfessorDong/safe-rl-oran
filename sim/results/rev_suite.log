@@ -1,0 +1,65 @@
+[R1] CVaR feasibility test
+  policy-independent floor      : 2.019
+  best implementable (always-on): 3.050
+  submitted Gamma = 3.0 feasible: False
+  -> sim/results/rev_feasibility.json
+[R2] Headline comparison (Gamma=3.5, 800 updates)
+                          controller     P(W)    CVaR    viol  p99(ms)  tog/min
+                           Always-on   1610.0   3.050    0.7%     33.0      0.0
+                 Threshold heuristic    444.4  10.000   99.9%  29028.7    598.0
+          Lyapunov drift (bang-bang)   1115.2   4.544    6.6%     42.2   4045.9
+     Drift-plus-penalty ($\rho{=}1$)   1173.8   3.350    1.1%     35.9      0.0
+     Drift-plus-penalty ($\rho{=}2$)   1307.3   3.146    0.8%     33.9      0.0
+    Sleep-aware drift ($q_s{=}0.05$)   1024.0   4.063    3.7%     39.8   2840.7
+     Sleep-aware drift ($q_s{=}0.2$)    919.9   5.178   12.4%     47.6   4258.6
+      PPO-Lagrangian (expected cost)    853.5  10.000   89.5%  33926.9    164.2
+                                CRPO   1227.6   8.651   53.6%   3572.6      0.1
+                            WCSAC-GS   1078.2   9.930   79.2%   9987.5    174.8
+     Proposed (Safe-RL + LCB filter)   1149.9   4.496   10.3%     45.1   1256.1
+  -> sim/results/rev_headline.json
+[R3] Safety-filter study (kind x service-predictor error)
+        filter  pred bias     P(W)    CVaR  p99(ms)
+          none       0.00    249.2  10.000  77763.9
+     aggregate       0.00   1206.0   9.292    289.7
+           lcb       0.00   1059.5   5.067     49.0
+           lcb       0.25   1134.5   5.606     56.9
+           lcb       0.50   1193.7   5.641     61.8
+           lcb       1.00   1257.7   9.555   2128.7
+           lcb      -0.25   1115.0   4.674     46.5
+  -> sim/results/rev_filter.json
+[R4] Sensitivity to beta, lam_max, q0_cell, kappa, delta
+                knob    value     P(W)    CVaR    viol
+                beta      0.9   1097.8   4.312   15.5%
+                beta     0.95   1059.5   5.067   19.0%
+                beta     0.99   1005.7   7.005   35.7%
+             lam_max     10.0   1065.6   4.994   19.5%
+             lam_max     50.0   1059.5   5.067   19.0%
+             lam_max    200.0   1046.5   5.298   27.1%
+          q0_cell_Mb     0.25   1009.3   5.074   12.4%
+          q0_cell_Mb      1.0   1059.5   5.067   19.0%
+          q0_cell_Mb      4.0   1269.3   5.820   28.5%
+           lcb_kappa      0.0   1226.2   8.702   55.4%
+           lcb_kappa      1.0   1059.5   5.067   19.0%
+           lcb_kappa      2.0   1115.0   4.674   14.6%
+     delta_margin_Mb      0.0   1118.2   4.664   15.0%
+     delta_margin_Mb     0.02   1059.5   5.067   19.0%
+     delta_margin_Mb      0.1   1091.5   4.764   14.4%
+  -> sim/results/rev_sensitivity.json
+[R5] Scalability in cluster size (with per-slot inference time)
+     K  P/cell(W)    CVaR  infer(us/slot)  train(s)
+     7      150.6   5.246           326.5      51.4
+    19      175.5   3.482           338.2      57.4
+    37      178.5   2.848           326.9      57.0
+    61      177.3   3.434           199.8      53.9
+  -> sim/results/rev_scalability.json
+[R6] Theorem 1 stress test (filter on/off, risk pressure removed)
+    rate  filter   Qbar(Mb)   p99(ms)
+     0.3    True        2.3      37.1
+     0.3   False        2.9      66.6
+     0.5    True        4.6      54.3
+     0.5   False      292.0    2741.3
+     0.7    True       10.3     117.6
+     0.7   False     2705.3   20082.3
+  -> sim/results/rev_stress.json
+
+[revision suite] total 1888s

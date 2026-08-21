@@ -1,0 +1,22 @@
+\begin{table}[t]
+  \centering
+  \caption{Correspondence between the analysis of Section~\ref{sec:theory} and the implementation evaluated in Section~\ref{sec:eval}.}
+  \label{tab:theory_impl}
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Quantity & Analysis & Implementation \\
+    \midrule
+    Step sizes & diminishing & constant \\
+    Dual update & integral, \eqref{eq:dual_update} & PID, \eqref{eq:pid_dual} \\
+    Dual cap & none & $\lambda_{\max}\!=\!50$ \\
+    Critics & single, augmented cost & separate energy and risk \\
+    Conditioning & $X(t)$ & $X(t),\lambda,\tau$ \\
+    Safety filter & LCB projection, \eqref{eq:safe_set} & LCB projection, per cell \\
+    Advantage & exact differential & GAE-$\lambda$ \\
+    Projection & smoothed $\Pi_\rho$ & hard \\
+    CVaR result & $\le\Gamma$ (conditional) & $4.50$ at $\Gamma\!=\!3.5$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}

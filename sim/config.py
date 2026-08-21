@@ -224,6 +224,12 @@ class SimCfg:
     arr: ArrivalsCfg = field(default_factory=ArrivalsCfg)
     algo: AlgoCfg = field(default_factory=AlgoCfg)
 
+    # When set, the loaders raise instead of silently substituting a
+    # synthetic trace. Every experiment reported in the paper runs with this
+    # on, so a missing dataset fails loudly rather than producing plausible
+    # numbers from the wrong source.
+    require_real_data: bool = True
+
     data_dir: str = "sim/data"
     results_dir: str = "sim/results"
 

@@ -1,0 +1,93 @@
+{
+  "floor": {
+    "mean": 2.0194631695747374,
+    "lo": 2.0045662850141523,
+    "hi": 2.0340538710355758,
+    "std": 0.025791289568851176
+  },
+  "always_on_cvar": {
+    "mean": 3.0500821446897524,
+    "lo": 2.93410534944533,
+    "hi": 3.16975580383365,
+    "std": 0.20511403396458425
+  },
+  "always_on_power": {
+    "mean": 1610.0,
+    "lo": 1610.0,
+    "hi": 1610.0,
+    "std": 0.0
+  },
+  "gamma_min_any_policy": 2.0194631695747374,
+  "gamma_min_implementable": 3.0500821446897524,
+  "gamma_submitted": 3.0,
+  "submitted_was_feasible": false,
+  "gamma_headline": 3.5,
+  "per_seed": [
+    {
+      "seed": 3736873475,
+      "floor": 2.0093607902526855,
+      "always_on": 2.9429288097551813,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 3216124221,
+      "floor": 1.9987255334854126,
+      "always_on": 2.9936651930790212,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 2866381271,
+      "floor": 2.009756088256836,
+      "always_on": 3.019929033109615,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 3311302123,
+      "floor": 1.9737160205841064,
+      "always_on": 2.826247819786635,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 2037261841,
+      "floor": 2.0160303115844727,
+      "always_on": 2.8759317542989353,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 1494885813,
+      "floor": 2.0317156314849854,
+      "always_on": 3.3382256044657765,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 765964185,
+      "floor": 2.0387215614318848,
+      "always_on": 3.4384089389469317,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 396484212,
+      "floor": 2.0607094764709473,
+      "always_on": 3.1977467105602946,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 1345259536,
+      "floor": 2.0490376949310303,
+      "always_on": 2.9347507277331637,
+      "always_on_power": 1610.0
+    },
+    {
+      "seed": 859387382,
+      "floor": 2.0068585872650146,
+      "always_on": 2.9329868551619667,
+      "always_on_power": 1610.0
+    }
+  ],
+  "_provenance": {
+    "arrival_source": "shanghai",
+    "channel_source": "lumos5g",
+    "require_real_data": true,
+    "seed_sequence": 20260601
+  }
+}

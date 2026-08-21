@@ -1,0 +1,25 @@
+\begin{table*}[t]
+  \centering
+  \caption{Controller comparison on the seven-cell cluster at $\Gamma=3.5$, ten canonical seeds. Subscripts are $95\%$ bootstrap confidence intervals. Rows above the rule are non-learning controllers.}
+  \label{tab:headline}
+  \footnotesize
+  \setlength{\tabcolsep}{8pt}
+  \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    Controller & $P$ (W) & $\CVaR_{\beta}$ & $\Pr\{\ell{>}\Gamma\}$ & $p_{99}$ (ms) & tog/min \\
+    \midrule
+    Always-on & $1610.0_{[1610,1610]}$ & $3.050_{[2.93,3.17]}$ & $0.7\%$ & $33$ & $0$ \\
+    Threshold heuristic & $444.4_{[443,446]}$ & $10.000_{[10.00,10.00]}$ & $99.9\%$ & $29.0\!\times\!10^{3}$ & $598$ \\
+    Lyapunov drift, bang-bang & $1115.2_{[1114,1117]}$ & $4.544_{[4.43,4.69]}$ & $6.6\%$ & $42$ & $4046$ \\
+    Drift-plus-penalty, $\rho\!=\!1$ & $1173.8_{[1173,1175]}$ & $3.350_{[3.24,3.47]}$ & $1.1\%$ & $36$ & $0$ \\
+    Drift-plus-penalty, $\rho\!=\!2$ & $1307.3_{[1307,1308]}$ & $3.146_{[3.03,3.26]}$ & $0.8\%$ & $34$ & $0$ \\
+    Sleep-aware drift, $q_s\!=\!0.05$ & $1024.0_{[1023,1025]}$ & $4.063_{[3.93,4.21]}$ & $3.7\%$ & $40$ & $2841$ \\
+    Sleep-aware drift, $q_s\!=\!0.2$ & $919.9_{[919,921]}$ & $5.178_{[5.00,5.37]}$ & $12.4\%$ & $48$ & $4259$ \\
+    \midrule
+    PPO-Lagrangian (expected cost) & $853.5_{[621,1054]}$ & $10.000_{[10.00,10.00]}$ & $89.5\%$ & $33.9\!\times\!10^{3}$ & $164$ \\
+    CRPO~\cite{Xu_CRPO_ICML2021} & $1227.6_{[1155,1291]}$ & $8.651_{[7.19,10.00]}$ & $53.6\%$ & $3.6\!\times\!10^{3}$ & $0$ \\
+    WCSAC-GS~\cite{Yang_WCSAC_ML2023} & $1078.2_{[1003,1153]}$ & $9.930_{[9.80,10.00]}$ & $79.2\%$ & $10.0\!\times\!10^{3}$ & $175$ \\
+    \textbf{Proposed} & $1149.9_{[1095,1204]}$ & $4.496_{[4.05,4.93]}$ & $10.3\%$ & $45$ & $1256$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
