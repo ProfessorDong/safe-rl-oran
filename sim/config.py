@@ -57,6 +57,19 @@ class ChannelCfg:
     mu_max_mbps: float = 80.0
     mu_min_mbps: float = 5.0     # minimum when cell is awake but throttled
     sinr_var: float = 0.20       # log-normal multiplicative noise on service rate
+
+    # --- correlated channel (R1 revision, Reviewer 1 point 7) -------------
+    # The submitted model drew the Lumos5G multiplier independently per cell
+    # per slot, which discards the temporal persistence of mmWave throughput
+    # and any spatial or load coupling. These knobs reintroduce all three:
+    #   ar1_rho   temporal AR(1) persistence of the per-cell multiplier
+    #   spatial_rho  fraction of the innovation shared across the cluster
+    #   load_coupling  strength of the negative correlation between offered
+    #                  load and achievable rate (congestion/interference)
+    # rho = 0 with no coupling recovers the submitted i.i.d. behaviour.
+    ar1_rho: float = 0.0
+    spatial_rho: float = 0.0
+    load_coupling: float = 0.0
     # When Lumos5G data is present, mu_max is modulated per slot by the
     # empirical SINR trace; otherwise we use the synthetic noise above.
 

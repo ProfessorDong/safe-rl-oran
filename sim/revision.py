@@ -404,13 +404,99 @@ def exp_vsweep(seeds, pool, n_updates=400):
     return out
 
 
+# ===================================================================== R8
+def _corr_one(args):
+    name, corr, seed, n_updates = args
+    cfg = _cfg()
+    if corr:
+        cfg.chan.ar1_rho = 0.9
+        cfg.chan.spatial_rho = 0.4
+        cfg.chan.load_coupling = 0.6
+    if name == "SafeRL":
+        arr, _ = generate_arrivals(cfg, T=cfg.time.T_slots_train, seed=seed)
+        env_t = CellularEnv(cfg, arr, seed=seed)
+        ctl = make_baseline("SafeRL", cfg, seed=seed)
+        for _ in range(n_updates):
+            b = ctl.collect_rollout(env_t, n_slots=cfg.algo.rollout_slots)
+            ctl.update_actor_critic(b)
+    else:
+        ctl = make_baseline(name, cfg, seed=seed)
+    arr_e, _ = generate_arrivals(cfg, T=cfg.time.T_slots_eval, seed=seed + 9000)
+    env = CellularEnv(cfg, arr_e, seed=seed + 9000)
+    m = run_episode(ctl, env, cfg, seed=seed + 9000)
+    m.update(name=name, corr=corr, seed=seed)
+    return m
+
+
+def exp_correlation(seeds, pool, n_updates=400):
+    """Reviewer 1, point 7: the submitted channel drew the Lumos5G
+    multiplier i.i.d. per cell per slot. Here a Gaussian copula imposes
+    temporal persistence, cross-cell correlation and negative
+    load/rate coupling while preserving the empirical marginal."""
+    print("[R8] Correlated channel (AR(1) 0.9, spatial 0.4, load coupling 0.6)")
+    names = ["DriftPlusPenalty", "SleepAwareDrift", "SafeRL"]
+    jobs = [(n, c, s, n_updates) for n in names for c in (False, True)
+            for s in seeds]
+    rows = pool.map(_corr_one, jobs)
+    out = {}
+    print(f"  {'controller':>18} {'channel':>12} {'P(W)':>8} {'CVaR':>7} {'p99(ms)':>9}")
+    for n in names:
+        for c in (False, True):
+            rs = [r for r in rows if r["name"] == n and r["corr"] == c]
+            a = _agg(rs)
+            out[f"{n}_corr{c}"] = a
+            print(f"  {n:>18} {('correlated' if c else 'i.i.d.'):>12} "
+                  f"{a['avg_power_W']['mean']:8.1f} {a['cvar_beta']['mean']:7.3f} "
+                  f"{a['p99_delay_ms']['mean']:9.1f}")
+    _save(out, "rev_correlation.json")
+    return out
+
+
+# ===================================================================== R9
+def exp_compute(seeds, pool):
+    """Reviewer 1, point 8: account for the energy of running the
+    controller itself, not just the radio."""
+    print("[R9] xApp compute energy")
+    import time as _t
+    cfg = _cfg()
+    arr, _ = generate_arrivals(cfg, T=cfg.time.T_slots_eval, seed=seeds[0] + 9000)
+    env = CellularEnv(cfg, arr, seed=seeds[0] + 9000)
+    ctl = make_baseline("SafeRL", cfg, seed=seeds[0])
+    ctl.bind(env)
+    s = env.reset(seed=seeds[0] + 9000)
+    n = 2000
+    t0 = _t.perf_counter()
+    for _ in range(n):
+        a, _, _, _ = ctl.act(s, env.q, stochastic=False)
+        s, c, done = env.step(a)
+        ctl.observe(c)
+        if done:
+            s = env.reset(seed=seeds[0] + 9000)
+    dt_us = (_t.perf_counter() - t0) / n * 1e6
+    duty = dt_us / (cfg.dt_s * 1e6)
+    # A near-RT RIC core is commonly budgeted at 15-25 W; take 20 W and
+    # charge only the fraction of wall-clock the controller occupies.
+    core_W = 20.0
+    xapp_W = core_W * duty
+    radio_W = 1149.9
+    out = dict(inference_us_per_slot=dt_us, slot_duty_fraction=duty,
+               assumed_core_W=core_W, xapp_power_W=xapp_W,
+               radio_power_W=radio_W,
+               overhead_pct=100.0 * xapp_W / radio_W)
+    print(f"  inference {dt_us:.0f} us/slot -> {100*duty:.1f}% of a 10 ms slot")
+    print(f"  xApp power {xapp_W:.2f} W on a {core_W:.0f} W core "
+          f"= {out['overhead_pct']:.3f}% of {radio_W:.0f} W radio power")
+    _save(out, "rev_compute.json")
+    return out
+
+
 # =====================================================================
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("which", nargs="?", default="all",
                     choices=["all", "feasibility", "headline", "filter",
                              "sensitivity", "scalability", "stress",
-                             "vsweep"])
+                             "vsweep", "correlation", "compute"])
     ap.add_argument("--seeds", type=int, default=10)
     ap.add_argument("--updates", type=int, default=800)
     ap.add_argument("--workers", type=int, default=20)
@@ -432,6 +518,10 @@ def main():
             exp_stress(seeds, pool)
         if args.which in ("all", "vsweep"):
             exp_vsweep(seeds, pool, max(200, args.updates // 2))
+        if args.which in ("all", "correlation"):
+            exp_correlation(seeds, pool, max(200, args.updates // 2))
+        if args.which in ("all", "compute"):
+            exp_compute(seeds, pool)
     print(f"\n[revision suite] total {time.time()-t0:.0f}s")
 
 

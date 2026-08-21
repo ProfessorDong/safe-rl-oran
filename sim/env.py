@@ -38,7 +38,14 @@ from __future__ import annotations
 import numpy as np
 from typing import Dict, Tuple, Optional
 from .config import SimCfg
+from math import erf as _erf
 from .channel_lumos5g import load_channel_multipliers
+
+_verf = np.vectorize(_erf)
+
+
+def erf(x):
+    return _verf(x)
 
 
 Q_SCALE_Mb = 50.0  # normalization for q (Mbit)
@@ -98,6 +105,8 @@ class CellularEnv:
         self.a_bar = self.arrivals.mean(axis=1) + 1e-6
         self.dwell = np.full(self.B, self.cfg.energy.min_on_slots,
                              dtype=np.int32)
+        self._ar = np.zeros(self.B, dtype=np.float64)   # AR(1) channel latent
+        self._pool_sorted = None
 
     def reset(self, seed: Optional[int] = None) -> np.ndarray:
         if seed is not None:
@@ -132,6 +141,51 @@ class CellularEnv:
             ]
         parts.append(np.array([np.cos(phi_t), np.sin(phi_t)], dtype=np.float32))
         return np.concatenate(parts).astype(np.float32)
+
+    def _draw_channel(self, a_raw_next: np.ndarray) -> np.ndarray:
+        """Per-cell service-rate multiplier for this slot.
+
+        With all correlation knobs at zero this samples the Lumos5G pool
+        independently per cell per slot, reproducing the submitted model.
+        Otherwise the empirical multiplier is warped by an AR(1) factor that
+        persists in time, shares part of its innovation across the cluster,
+        and is depressed where offered load is high, which is the temporal,
+        spatial and load coupling Reviewer 1 asked about. The marginal is
+        kept close to the empirical one by renormalizing the warp to unit
+        mean.
+        """
+        ch = self.cfg.chan
+        rho = float(getattr(ch, "ar1_rho", 0.0))
+        srho = float(getattr(ch, "spatial_rho", 0.0))
+        lc = float(getattr(ch, "load_coupling", 0.0))
+        if rho == 0.0 and srho == 0.0 and lc == 0.0:
+            return self.channel_pool[
+                self.rng.integers(0, len(self.channel_pool), size=self.B)
+            ].astype(np.float32)
+
+        # AR(1) latent with a shared (cluster-wide) and an idiosyncratic part.
+        common = self.rng.normal(0.0, 1.0)
+        idio = self.rng.normal(0.0, 1.0, size=self.B)
+        innov = np.sqrt(srho) * common + np.sqrt(max(1.0 - srho, 0.0)) * idio
+        self._ar = (rho * self._ar
+                    + np.sqrt(max(1.0 - rho * rho, 1e-9)) * innov)
+
+        # Congestion: cells offered more than their mean load see lower rate.
+        load_rel = a_raw_next / (self.a_bar + 1e-9) - 1.0
+        z = self._ar - lc * load_rel
+
+        # Gaussian copula: map the latent through the standard normal CDF and
+        # read off the corresponding empirical quantile. This imposes the
+        # desired temporal, spatial and load dependence while leaving the
+        # Lumos5G marginal exactly intact, unlike a multiplicative warp whose
+        # effect is swamped by the heavy tail of the empirical draw.
+        if self._pool_sorted is None:
+            self._pool_sorted = np.sort(np.asarray(self.channel_pool,
+                                                   dtype=np.float32))
+        u = 0.5 * (1.0 + erf(z / np.sqrt(2.0)))
+        idx = np.clip((u * (len(self._pool_sorted) - 1)).astype(int),
+                      0, len(self._pool_sorted) - 1)
+        return self._pool_sorted[idx].astype(np.float32)
 
     def _redistribute(self, a_raw: np.ndarray, s_t: np.ndarray):
         """Route a sleeping cell's offered traffic onto awake neighbours.
@@ -194,9 +248,7 @@ class CellularEnv:
 
         # Channel realization: draw from Lumos5G-derived multiplier pool
         # (or synthetic log-normal fallback if dataset absent).
-        mu_jitter = self.channel_pool[
-            self.rng.integers(0, len(self.channel_pool), size=self.B)
-        ].astype(np.float32)
+        mu_jitter = self._draw_channel(a_raw_next=self.arrivals[:, self.t])
         mu_cap = self.cfg.chan.mu_max_mbps * self.cfg.dt_s  # Mbit/slot at full phi
         mu_floor = self.cfg.chan.mu_min_mbps * self.cfg.dt_s
         e_wake_frac = getattr(self.cfg.energy, "wake_service_frac", 1.0)
