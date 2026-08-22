@@ -52,8 +52,10 @@ class TimeCfg:
 # ========== channel / service rate ==========
 @dataclass
 class ChannelCfg:
-    # Reference service rate per cell at full resource share (Mbps).
-    # Calibrated to match Lumos5G median 5G throughput.
+    # Reference service rate per cell at full resource share (Mbps). This is
+    # the model's own capacity scale, not a Lumos5G quantity: the Lumos5G
+    # multiplier is normalized to unit median, so the absolute measured
+    # median (424 Mbps) does not enter.
     mu_max_mbps: float = 80.0
     mu_min_mbps: float = 5.0     # minimum when cell is awake but throttled
     sinr_var: float = 0.20       # log-normal multiplicative noise on service rate
@@ -129,7 +131,7 @@ class ArrivalsCfg:
 class AlgoCfg:
     # Constraint targets.
     beta: float = 0.95           # CVaR confidence
-    Gamma: float = 3.0           # CVaR budget on per-slot loss (dimensionless)
+    Gamma: float = 3.5           # CVaR budget on per-slot loss (dimensionless)
     # Loss is normalized to [0, ell_max].
     ell_max: float = 10.0
     lam_max: float = 50.0        # cap on the dual variable for stability

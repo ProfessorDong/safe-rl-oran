@@ -1,14 +1,15 @@
 {
-  "inference_us_per_slot": 138.49183899583295,
-  "slot_duty_fraction": 0.013849183899583294,
+  "inference_us_per_slot": 144.19819100294262,
+  "slot_duty_fraction": 0.014419819100294263,
   "assumed_core_W": 20.0,
-  "xapp_power_W": 0.2769836779916659,
+  "xapp_power_W": 0.28839638200588524,
   "radio_power_W": 1149.9,
-  "overhead_pct": 0.02408763179334428,
+  "overhead_pct": 0.02508012714200237,
   "_provenance": {
     "arrival_source": "shanghai",
     "channel_source": "lumos5g",
     "require_real_data": true,
-    "seed_sequence": 20260601
+    "seed_sequence": 20260601,
+    "train_updates": 3200
   }
 }

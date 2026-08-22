@@ -1,0 +1,11 @@
+{
+  "lag1_autocorr": 0.6680764933217226,
+  "cross_cell_corr": 0.26263826206289514,
+  "rate_load_corr": -0.377939284214477,
+  "ar1_rho": 0.9,
+  "spatial_rho": 0.4,
+  "load_coupling": 0.6,
+  "slots": 10000,
+  "cells": 7,
+  "seed": 9000
+}

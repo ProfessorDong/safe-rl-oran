@@ -15,8 +15,9 @@
     Conditioning & $X(t)$ & $X(t),\lambda,\tau$ \\
     Safety filter & LCB projection, \eqref{eq:safe_set} & LCB projection, per cell \\
     Advantage & exact differential & GAE-$\lambda$ \\
+    Timescale order & critic $\gg$ actor $\gg$ dual,\,$\tau$ & $\tau$ per slot, others per rollout \\
     Projection & smoothed $\Pi_\rho$ & hard \\
-    CVaR result & $\le\Gamma$ (conditional) & $4.50$ at $\Gamma\!=\!3.5$ \\
+    CVaR result & $\le\Gamma$ (conditional) & $3.528$ at $\Gamma\!=\!3.5$ \\
     \bottomrule
   \end{tabular}
 \end{table}

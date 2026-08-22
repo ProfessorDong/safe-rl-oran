@@ -75,8 +75,13 @@ def lcb_project(action: np.ndarray, q: np.ndarray, a_hat: np.ndarray,
     eff = chan_mean * (1.0 + bias) - kappa * chan_std * scale
     out = np.array(action, dtype=np.float32, copy=True)
     if eff <= 1e-9:
-        # The conservative predictor cannot certify any service level; fall
-        # back to full service on the backlogged cells.
+        # Degenerate regime. With kappa large enough that
+        # chan_mean*(1+bias) - kappa*chan_std*scale <= 0, the lower confidence
+        # bound certifies no positive service level at all, and the projection
+        # falls back to full service on every backlogged cell. On the Lumos5G
+        # pool (mean 1.043, std 0.780) this happens for kappa >~ 1.34, so a
+        # kappa=2 sweep point measures this fallback rather than LCB
+        # conservatism proper. Reported as such in the evaluation.
         out[q >= q0] = 1.0
         return out
 

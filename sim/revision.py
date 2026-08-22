@@ -34,6 +34,9 @@ from .safe_baselines import make_safe_baseline
 from .metrics import empirical_cvar, bootstrap_ci
 
 RESULTS = "sim/results"
+# Single training budget shared by every experiment that trains, recorded in
+# each result file's provenance block.
+_TRAIN_UPDATES = [None]
 # Headline risk budget. Chosen from the feasibility test: the CVaR-optimal
 # AlwaysOn policy attains ~3.0, so any budget at or below that is infeasible
 # by construction; 3.5 leaves a genuine Slater margin.
@@ -55,6 +58,13 @@ LEARNING = [
     ("LagrangianPPO", "PPO-Lagrangian (expected cost)"),
     ("CRPO", "CRPO"),
     ("WCSAC", "WCSAC-GS"),
+    # Each learned baseline is also run WITH the LCB safety filter. Without
+    # these rows the comparison against the proposed controller confounds the
+    # constraint mechanism with the filter, which Section VI-D shows is the
+    # single largest lever; with them, the two effects separate.
+    ("LagrangianPPO+filter", "PPO-Lagrangian + LCB filter"),
+    ("CRPO+filter", "CRPO + LCB filter"),
+    ("WCSAC+filter", "WCSAC-GS + LCB filter"),
     ("SafeRL", "Proposed (Safe-RL + LCB filter)"),
 ]
 
@@ -71,7 +81,8 @@ def _provenance() -> dict:
     env = CellularEnv(cfg, arr, seed=0)
     return dict(arrival_source=src, channel_source=env.channel_source,
                 require_real_data=bool(cfg.require_real_data),
-                seed_sequence=20260601)
+                seed_sequence=20260601,
+                train_updates=_TRAIN_UPDATES[0])
 
 
 def _save(obj, name):
@@ -157,8 +168,12 @@ def _headline_one(args):
     else:
         arr, _ = generate_arrivals(cfg, T=cfg.time.T_slots_train, seed=seed)
         env_t = CellularEnv(cfg, arr, seed=seed)
-        ctl = (make_baseline("SafeRL", cfg, seed=seed) if name == "SafeRL"
-               else make_safe_baseline(name, cfg, seed=seed))
+        base, with_filter = (name[:-7], True) if name.endswith("+filter") \
+            else (name, False)
+        ctl = (make_baseline("SafeRL", cfg, seed=seed) if base == "SafeRL"
+               else make_safe_baseline(base, cfg, seed=seed))
+        if with_filter:
+            ctl.use_safety_filter = True
         for _ in range(n_updates):
             b = ctl.collect_rollout(env_t, n_slots=cfg.algo.rollout_slots)
             ctl.update_actor_critic(b)
@@ -267,7 +282,7 @@ def exp_sensitivity(seeds, pool, n_updates=400):
     grid = ([("beta", v) for v in (0.90, 0.95, 0.99)]
             + [("lam_max", v) for v in (10.0, 50.0, 200.0)]
             + [("q0_cell_Mb", v) for v in (0.25, 1.0, 4.0)]
-            + [("lcb_kappa", v) for v in (0.0, 1.0, 2.0)]
+            + [("lcb_kappa", v) for v in (0.0, 0.5, 1.0, 2.0)]
             + [("delta_margin_Mb", v) for v in (0.0, 0.02, 0.1)])
     jobs = [(k, v, s, n_updates) for k, v in grid for s in seeds]
     rows = pool.map(_sens_one, jobs)
@@ -490,17 +505,71 @@ def exp_compute(seeds, pool):
     return out
 
 
+# ===================================================================== R10
+def _curve_one(args):
+    """Train once per seed, evaluating on a DEEP COPY at each checkpoint.
+
+    Evaluation is not side-effect free: run_episode calls ctl.observe(), which
+    advances the controller's EWMA arrival estimate. Evaluating the live
+    controller mid-training therefore perturbs the run it is measuring, so we
+    snapshot instead.
+    """
+    import copy
+    seed, ckpts = args
+    cfg = _cfg()
+    arr, _ = generate_arrivals(cfg, T=cfg.time.T_slots_train, seed=seed)
+    env = CellularEnv(cfg, arr, seed=seed)
+    ctl = make_baseline("SafeRL", cfg, seed=seed)
+    out = {}
+    for u in range(1, max(ckpts) + 1):
+        b = ctl.collect_rollout(env, n_slots=cfg.algo.rollout_slots)
+        ctl.update_actor_critic(b)
+        if u in ckpts:
+            snap = copy.deepcopy(ctl)
+            arr_e, _ = generate_arrivals(cfg, T=cfg.time.T_slots_eval,
+                                         seed=seed + 9000)
+            m = run_episode(snap, CellularEnv(cfg, arr_e, seed=seed + 9000),
+                            cfg, seed=seed + 9000)
+            out[u] = dict(cvar=m["cvar_beta"], power=m["avg_power_W"],
+                          viol=m["viol_rate"], tog=m["toggles_per_min"],
+                          lam=float(ctl.lam))
+    return dict(seed=seed, ckpt=out)
+
+
+def exp_curve(seeds, pool, n_updates):
+    """Tail risk against training budget, used to justify the budget choice."""
+    ck = [c for c in (200, 400, 800, 1600, 3200, 6400) if c <= n_updates]
+    if n_updates not in ck:
+        ck.append(n_updates)
+    print(f"[R10] CVaR versus training budget (checkpoints {ck})")
+    rows = pool.map(_curve_one, [(s, ck) for s in seeds])
+    out = {}
+    print(f"  {'updates':>8} {'CVaR':>8} {'[lo,hi]':>16} {'P(W)':>8} "
+          f"{'viol':>7} {'lambda':>8}")
+    for u in ck:
+        cv = bootstrap_ci([r["ckpt"][u]["cvar"] for r in rows])
+        pw = bootstrap_ci([r["ckpt"][u]["power"] for r in rows])
+        vl = bootstrap_ci([r["ckpt"][u]["viol"] for r in rows])
+        lm = bootstrap_ci([r["ckpt"][u]["lam"] for r in rows])
+        out[str(u)] = dict(cvar=cv, power=pw, viol=vl, lam=lm)
+        print(f"  {u:8d} {cv['mean']:8.3f} [{cv['lo']:6.3f},{cv['hi']:6.3f}] "
+              f"{pw['mean']:8.1f} {vl['mean']*100:6.1f}% {lm['mean']:8.2f}")
+    _save(out, "rev_curve.json")
+    return out
+
+
 # =====================================================================
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("which", nargs="?", default="all",
                     choices=["all", "feasibility", "headline", "filter",
                              "sensitivity", "scalability", "stress",
-                             "vsweep", "correlation", "compute"])
+                             "vsweep", "correlation", "compute", "curve"])
     ap.add_argument("--seeds", type=int, default=10)
     ap.add_argument("--updates", type=int, default=800)
     ap.add_argument("--workers", type=int, default=20)
     args = ap.parse_args()
+    _TRAIN_UPDATES[0] = args.updates
     seeds = canonical_seeds(args.seeds)
     t0 = time.time()
     with mp.Pool(args.workers) as pool:
@@ -509,19 +578,21 @@ def main():
         if args.which in ("all", "headline"):
             exp_headline(seeds, pool, args.updates)
         if args.which in ("all", "filter"):
-            exp_filter(seeds, pool, max(200, args.updates // 2))
+            exp_filter(seeds, pool, args.updates)
         if args.which in ("all", "sensitivity"):
-            exp_sensitivity(seeds, pool, max(200, args.updates // 2))
+            exp_sensitivity(seeds, pool, args.updates)
         if args.which in ("all", "scalability"):
-            exp_scalability(seeds, pool, 200)
+            exp_scalability(seeds, pool, args.updates)
         if args.which in ("all", "stress"):
             exp_stress(seeds, pool)
         if args.which in ("all", "vsweep"):
-            exp_vsweep(seeds, pool, max(200, args.updates // 2))
+            exp_vsweep(seeds, pool, args.updates)
         if args.which in ("all", "correlation"):
-            exp_correlation(seeds, pool, max(200, args.updates // 2))
+            exp_correlation(seeds, pool, args.updates)
         if args.which in ("all", "compute"):
             exp_compute(seeds, pool)
+        if args.which in ("all", "curve"):
+            exp_curve(seeds, pool, args.updates)
     print(f"\n[revision suite] total {time.time()-t0:.0f}s")
 
 

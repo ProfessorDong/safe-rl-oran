@@ -61,3 +61,21 @@ figures/
 
 # Reference PDFs (not redistributable)
 refs/
+
+# Peer-review correspondence (confidential; never publish)
+Decision letter*.txt
+Reviewer*.pdf
+response_letter.*
+
+# Revision deliverables (contain the unpublished manuscript)
+dong_tccn_*.pdf
+dong_tccn_*.zip
+dong_tccn_*.tar.gz
+main_submitted.tex
+main_diff.tex
+main_tracked.tex
+
+# Superseded experiment artifacts
+sim/results/backup_800/
+sim/results/rev_*_long.json
+sim/results/rev_cvar_curve.json

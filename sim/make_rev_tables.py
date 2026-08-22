@@ -27,6 +27,9 @@ ORDER = [
     ("LagrangianPPO", "PPO-Lagrangian (expected cost)"),
     ("CRPO", "CRPO~\\cite{Xu_CRPO_ICML2021}"),
     ("WCSAC", "WCSAC-GS~\\cite{Yang_WCSAC_ML2023}"),
+    ("LagrangianPPO+filter", "PPO-Lagrangian + LCB filter"),
+    ("CRPO+filter", "CRPO + LCB filter"),
+    ("WCSAC+filter", "WCSAC-GS + LCB filter"),
     ("SafeRL", r"\textbf{Proposed}"),
 ]
 
@@ -86,8 +89,12 @@ THEORY_IMPL = [
     ("Safety filter", r"LCB projection, \eqref{eq:safe_set}",
      "LCB projection, per cell"),
     ("Advantage", "exact differential", r"GAE-$\lambda$"),
+    # Assumption 4 puts tau on the slowest timescale; the implementation
+    # updates it every slot while actor and dual update per rollout.
+    ("Timescale order", r"critic $\gg$ actor $\gg$ dual,\,$\tau$",
+     r"$\tau$ per slot, others per rollout"),
     ("Projection", r"smoothed $\Pi_\rho$", "hard"),
-    ("CVaR result", r"$\le\Gamma$ (conditional)", r"$4.50$ at $\Gamma\!=\!3.5$"),
+    ("CVaR result", r"$\le\Gamma$ (conditional)", None),   # filled from results
 ]
 
 
@@ -106,7 +113,13 @@ def theory_impl():
         r"    Quantity & Analysis & Implementation \\",
         r"    \midrule",
     ]
-    for q, t, i in THEORY_IMPL:
+    d = json.load(open(os.path.join(RESULTS_DIR, "rev_headline.json")))
+    cv = d["SafeRL"]["cvar_beta"]["mean"]
+    gam = d["_gamma"]
+    rows = [(q, t, (i if i is not None
+                    else rf"${cv:.3f}$ at $\Gamma\!=\!{gam}$"))
+            for q, t, i in THEORY_IMPL]
+    for q, t, i in rows:
         lines.append(f"    {q} & {t} & {i} \\\\")
     lines += [r"    \bottomrule", r"  \end{tabular}", r"\end{table}"]
     _write("rev_theory_impl.tex", lines)

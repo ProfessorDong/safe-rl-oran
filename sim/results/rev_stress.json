@@ -87,6 +87,7 @@
     "arrival_source": "shanghai",
     "channel_source": "lumos5g",
     "require_real_data": true,
-    "seed_sequence": 20260601
+    "seed_sequence": 20260601,
+    "train_updates": 3200
   }
 }

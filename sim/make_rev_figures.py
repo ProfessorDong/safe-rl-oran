@@ -105,6 +105,7 @@ def fig_feasibility():
 CLASSICAL = ["AlwaysOn", "Threshold", "LyapunovOnly", "DriftPlusPenalty",
              "DriftPlusPenalty:2.0", "SleepAwareDrift", "SleepAwareDrift:0.2"]
 LEARNED = ["LagrangianPPO", "CRPO", "WCSAC"]
+LEARNED_FILTERED = ["LagrangianPPO+filter", "CRPO+filter", "WCSAC+filter"]
 SHORT = {
     "AlwaysOn": "always-on", "Threshold": "threshold",
     "LyapunovOnly": "Lyap. bang-bang",
@@ -112,6 +113,8 @@ SHORT = {
     "SleepAwareDrift": r"sleep-aware $q_s$=0.05",
     "SleepAwareDrift:0.2": r"sleep-aware $q_s$=0.2",
     "LagrangianPPO": "PPO-Lagrangian", "CRPO": "CRPO", "WCSAC": "WCSAC-GS",
+    "LagrangianPPO+filter": "PPO-Lag.+filter", "CRPO+filter": "CRPO+filter",
+    "WCSAC+filter": "WCSAC+filter",
     "SafeRL": "proposed",
 }
 
@@ -131,11 +134,17 @@ def fig_pareto():
     for k in LEARNED:
         x, y = xy(k)
         ax.scatter(x, y, s=34, marker="^", color=C_LEARNED, zorder=3)
+    for k in LEARNED_FILTERED:
+        x, y = xy(k)
+        ax.scatter(x, y, s=34, marker="^", facecolor="none",
+                   edgecolor=C_LEARNED, linewidth=0.9, zorder=3)
     xp, yp = xy("SafeRL")
     ax.scatter(xp, yp, s=95, marker="*", color=C_PROPOSED, zorder=5,
                edgecolor="k", linewidth=0.4)
     ax.scatter([], [], s=34, marker="o", color=C_CLASSICAL, label="classical")
     ax.scatter([], [], s=34, marker="^", color=C_LEARNED, label="learned (prior)")
+    ax.scatter([], [], s=34, marker="^", facecolor="none", edgecolor=C_LEARNED,
+               linewidth=0.9, label="learned + filter")
     ax.scatter([], [], s=95, marker="*", color=C_PROPOSED,
                edgecolor="k", linewidth=0.4, label="proposed")
     ax.axhline(d["_gamma"], color=C_REF, ls="--", lw=1.0)
@@ -145,29 +154,44 @@ def fig_pareto():
     ax.set_title("energy vs tail risk")
     ax.legend(loc="upper right", framealpha=0.9)
 
-    # Zoomed view of the useful region, annotated.
+    # Right panel: the proposed operating point against the *swept* frontier
+    # of the classical drift family, rather than against two hand-picked
+    # settings. A single point can always be made to look good next to two
+    # others; it cannot hide from the family's whole achievable curve.
     ax = axes[1]
-    keep = ["DriftPlusPenalty", "DriftPlusPenalty:2.0", "SleepAwareDrift",
-            "SleepAwareDrift:0.2", "LyapunovOnly", "AlwaysOn", "SafeRL"]
-    for k in keep:
+    fr = _load("rev_frontier.json")
+
+    def curve(prefix, grid):
+        pts = [(fr[f"{prefix}:{g}"]["avg_power_W"]["mean"],
+                fr[f"{prefix}:{g}"]["cvar_beta"]["mean"]) for g in grid]
+        pts.sort()
+        return [p for p, _ in pts], [c for _, c in pts]
+
+    xr, yr = curve("DriftPlusPenalty", fr["_rho_grid"])
+    ax.plot(xr, yr, "-o", color=C_CLASSICAL, lw=1.2, ms=2.6, zorder=3,
+            label=r"drift-plus-penalty, $\rho$ swept")
+    xq, yq = curve("SleepAwareDrift", fr["_qs_grid"])
+    ax.plot(xq, yq, "-s", color="#67a9cf", lw=1.2, ms=2.6, zorder=3,
+            label=r"sleep-aware drift, $q_s$ swept")
+
+    for k in LEARNED_FILTERED:
         x, y = xy(k)
-        col = C_PROPOSED if k == "SafeRL" else C_CLASSICAL
-        mk = "*" if k == "SafeRL" else "o"
-        sz = 110 if k == "SafeRL" else 34
-        ax.scatter(x, y, s=sz, marker=mk, color=col, zorder=4,
-                   edgecolor="k" if k == "SafeRL" else "none", linewidth=0.4)
-        off = {"LyapunovOnly": (-58, 6), "SafeRL": (6, -11),
-               "SleepAwareDrift": (5, -10), "SleepAwareDrift:0.2": (5, 4),
-               "DriftPlusPenalty": (-16, 6), "DriftPlusPenalty:2.0": (-14, -12),
-               "AlwaysOn": (-38, 6)}.get(k, (3, 4))
-        ax.annotate(SHORT[k], xy=(x, y), xytext=off,
-                    textcoords="offset points", fontsize=6.5)
+        ax.scatter(x, y, s=30, marker="^", color=C_LEARNED, zorder=4)
+    ax.scatter([], [], s=30, marker="^", color=C_LEARNED,
+               label="prior safe RL + filter")
+
+    xp, yp = xy("SafeRL")
+    ax.scatter(xp, yp, s=120, marker="*", color=C_PROPOSED, zorder=6,
+               edgecolor="k", linewidth=0.4, label="proposed")
+
     ax.axhline(d["_gamma"], color=C_REF, ls="--", lw=1.0)
+    ax.text(ax.get_xlim()[0] + 20, d["_gamma"] + 0.06, r"$\Gamma$",
+            color=C_REF, fontsize=8)
     ax.set_xlabel("average cluster power (W)")
     ax.set_ylabel(r"$\mathrm{CVaR}_{0.95}(\ell)$")
-    ax.set_title("detail (toggling not shown)")
-    ax.set_xlim(880, 1700)
-    ax.set_ylim(2.8, 5.6)
+    ax.set_title("against the swept classical frontier")
+    ax.set_ylim(2.9, 5.0)
+    ax.legend(loc="upper right", framealpha=0.9)
     _save(fig, "r2_pareto")
 
 
@@ -212,7 +236,7 @@ def fig_filter():
 def fig_sensitivity():
     d = _load("rev_sensitivity.json")
     panels = [("beta", [0.9, 0.95, 0.99], r"CVaR level $\beta$"),
-              ("lcb_kappa", [0.0, 1.0, 2.0], r"LCB conservatism $\kappa$"),
+              ("lcb_kappa", [0.0, 0.5, 1.0, 2.0], r"LCB conservatism $\kappa$"),
               ("q0_cell_Mb", [0.25, 1.0, 4.0], r"filter threshold $q_0$ (Mb)"),
               ("lam_max", [10.0, 50.0, 200.0], r"dual cap $\lambda_{\max}$")]
     fig, axes = plt.subplots(1, 4, figsize=(7.1, 2.0), constrained_layout=True)
