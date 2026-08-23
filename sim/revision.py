@@ -85,6 +85,19 @@ def _provenance() -> dict:
                 train_updates=_TRAIN_UPDATES[0])
 
 
+def _headline_radio_W(default: float = 1296.3) -> float:
+    """Radio power of the proposed controller, from the stored headline.
+
+    Falls back to the value at the reported training budget when the headline
+    has not been run yet, so `compute` remains standalone.
+    """
+    try:
+        with open(os.path.join(RESULTS, "rev_headline.json")) as f:
+            return float(json.load(f)["SafeRL"]["avg_power_W"]["mean"])
+    except (OSError, KeyError, ValueError):
+        return default
+
+
 def _save(obj, name):
     if isinstance(obj, dict):
         obj = dict(obj)
@@ -493,7 +506,12 @@ def exp_compute(seeds, pool):
     # charge only the fraction of wall-clock the controller occupies.
     core_W = 20.0
     xapp_W = core_W * duty
-    radio_W = 1149.9
+    # Charge the overhead against the radio power the proposed controller
+    # actually draws, read from the headline result rather than pasted here.
+    # A literal goes stale the moment the headline is re-run at a different
+    # training budget, which is how this line came to hold an 800-update
+    # figure while the paper quoted the 3200-update one.
+    radio_W = _headline_radio_W()
     out = dict(inference_us_per_slot=dt_us, slot_duty_fraction=duty,
                assumed_core_W=core_W, xapp_power_W=xapp_W,
                radio_power_W=radio_W,

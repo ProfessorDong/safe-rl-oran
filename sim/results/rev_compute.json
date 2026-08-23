@@ -1,10 +1,10 @@
 {
-  "inference_us_per_slot": 144.19819100294262,
-  "slot_duty_fraction": 0.014419819100294263,
+  "inference_us_per_slot": 138.680127565749,
+  "slot_duty_fraction": 0.013868012756574899,
   "assumed_core_W": 20.0,
-  "xapp_power_W": 0.28839638200588524,
-  "radio_power_W": 1149.9,
-  "overhead_pct": 0.02508012714200237,
+  "xapp_power_W": 0.277360255131498,
+  "radio_power_W": 1296.3328571984862,
+  "overhead_pct": 0.021395759090061417,
   "_provenance": {
     "arrival_source": "shanghai",
     "channel_source": "lumos5g",
