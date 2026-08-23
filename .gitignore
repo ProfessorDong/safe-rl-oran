@@ -79,3 +79,8 @@ main_tracked.tex
 sim/results/backup_800/
 sim/results/rev_*_long.json
 sim/results/rev_cvar_curve.json
+
+# Original-submission table, kept locally for the tracked-changes baseline only.
+# The current manuscript uses tab/rev_headline.tex; recover this one from the
+# v1.0-tccn-submission tag if needed.
+tab/headline.tex
