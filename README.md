@@ -71,6 +71,7 @@ sim/
 ├── frontier.py          Classical achievable frontier (rho and q_s swept)
 ├── attribution.py       Filter effect on a fixed policy (engaged vs bypassed)
 ├── dependence.py        Dependence realised by the correlated channel model
+├── resource_share.py    Mean executed resource share, per controller
 ├── make_tikz_figures.py TikZ/pgfplots figures drawn at true column width
 ├── make_rev_figures.py  Matplotlib figure set (superseded by the TikZ set)
 └── make_rev_tables.py   LaTeX tables, generated from stored results
@@ -121,6 +122,7 @@ OMP_NUM_THREADS=1 python3 -m sim.revision all --seeds 10 --updates 3200 --worker
 OMP_NUM_THREADS=1 python3 -m sim.frontier    --seeds 10
 OMP_NUM_THREADS=1 python3 -m sim.attribution --seeds 5 --updates 3200
 OMP_NUM_THREADS=1 python3 -m sim.dependence
+OMP_NUM_THREADS=1 python3 -m sim.resource_share --seeds 10
 
 # Figures and tables, generated from sim/results/*.json
 python3 -m sim.make_tikz_figures
