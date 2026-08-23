@@ -88,6 +88,10 @@ THEORY_IMPL = [
     ("Conditioning", r"$X(t)$", r"$X(t),\lambda,\tau$"),
     ("Safety filter", r"LCB projection, \eqref{eq:safe_set}",
      "LCB projection, per cell"),
+    # Theorem 1 assumes the arrival estimate is an upper bound; the deployed
+    # filter uses a centered EWMA with no inflation margin.
+    ("Arrival estimate", r"$\widehat a\ge\E[A\mid X]$ a.s.",
+     "causal EWMA, uninflated"),
     ("Advantage", "exact differential", r"GAE-$\lambda$"),
     # Assumption 4 puts tau on the slowest timescale; the implementation
     # updates it every slot while actor and dual update per rollout.
