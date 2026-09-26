@@ -1,0 +1,25 @@
+\begin{table}[t]
+  \centering
+  \caption{Correspondence between the analysis of Section~\ref{sec:theory} and the implementation evaluated in Section~\ref{sec:eval}.}
+  \label{tab:theory_impl}
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Quantity & Analysis & Implementation \\
+    \midrule
+    Actor, critic steps & diminishing & constant (Adam) \\
+    Threshold step & diminishing & $\zeta_t=10^{-2}/(1{+}10^{-4}t)$ \\
+    Dual update & integral, \eqref{eq:dual_update} & PID, \eqref{eq:pid_dual}, anti-windup \\
+    Dual cap & $\lambda_{\max}$ & $\lambda_{\max}\!=\!50$ \\
+    Advantage & exact, unstandardized & GAE, standardized, \eqref{eq:adv_mix} \\
+    Actor update & gradient step & PPO clipped ratio \\
+    Conditioning & $X(t)$ & $X(t),\lambda,\tau$ \\
+    Safety filter & drift condition \eqref{eq:exec_drift} & LCB projection or joint fallback \\
+    Arrival estimate & $\widehat a\ge\E[A\mid X,a]$ & causal EWMA through \eqref{eq:offload} \\
+    Projection & smoothed $\Pi_\rho$ & hard \\
+    Timescales & critic, actor, then $\lambda,\tau$ & $\tau$ per slot, others per rollout \\
+    CVaR result & $\le\Gamma$ (conditional) & $3.468$ at $\Gamma\!=\!3.5$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}

@@ -129,8 +129,11 @@ def load_profile(cfg: SimCfg, rng: np.random.Generator) -> Tuple[np.ndarray, str
     if os.path.exists(cache):
         try:
             d = np.load(cache, allow_pickle=False)
-            if d["profile"].shape == (B, 24):
-                return d["profile"], str(d["source"])
+            src = str(d["source"])
+            real_src = src in ("shanghai", "c2tm")
+            if d["profile"].shape == (B, 24) and (
+                    real_src or not getattr(cfg, "require_real_data", False)):
+                return d["profile"], src
         except Exception:
             pass
 

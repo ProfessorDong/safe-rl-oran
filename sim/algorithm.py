@@ -22,7 +22,7 @@ import torch.nn.functional as F
 
 from .config import SimCfg
 from .networks import Actor, FactoredActor, Critic
-from .safety_filter import safe_project, lcb_project
+from .safety_filter import safe_project, lcb_project, new_filter_stats
 from .env import CellularEnv
 
 
@@ -107,7 +107,14 @@ class SafeRLController:
         self._chan_std = 0.0
         self._a_hat = np.full(cfg.topo.B, cfg.arr.base_rate_Mb_per_slot,
                               dtype=np.float32)
+        # Causal EWMA of each cell's NOMINAL offered load. The filter combines
+        # it with the sleep pattern about to execute to predict the effective
+        # arrival at each cell, offloaded traffic included.
+        self._a_nom_hat = np.full(cfg.topo.B, cfg.arr.base_rate_Mb_per_slot,
+                                  dtype=np.float32)
         self._a_ewma = 0.01
+        self._env = None
+        self.filter_stats = new_filter_stats()
 
     # -----------------------------------------------------------------
     def bind(self, env) -> None:
@@ -115,6 +122,7 @@ class SafeRLController:
         pool = np.asarray(env.channel_pool, dtype=np.float64)
         self._chan_mean = float(pool.mean())
         self._chan_std = float(pool.std())
+        self._env = env
 
     def observe(self, cost: dict) -> None:
         """Update the causal arrival-rate estimate from an executed slot."""
@@ -123,6 +131,11 @@ class SafeRLController:
             r = self._a_ewma
             self._a_hat = ((1.0 - r) * self._a_hat + r * np.asarray(a_vec)
                            ).astype(np.float32)
+        a_raw = cost.get("a_raw")
+        if a_raw is not None:
+            r = self._a_ewma
+            self._a_nom_hat = ((1.0 - r) * self._a_nom_hat
+                               + r * np.asarray(a_raw)).astype(np.float32)
 
     # -----------------------------------------------------------------
     def augment(self, env_state: np.ndarray) -> np.ndarray:
@@ -166,14 +179,27 @@ class SafeRLController:
             raw_np = mean_pre.cpu().numpy().squeeze(0).astype(np.float32)
             a_np = (1.0 / (1.0 + np.exp(-raw_np))).astype(np.float32)
             lp_v = 0.0
-        if self.use_safety_filter:
+        if self.use_safety_filter and self._env is not None:
             kind = getattr(self.cfg.algo, "safety_filter_kind", "aggregate")
+            force = None
             if kind == "lcb":
-                a_np = lcb_project(a_np, q_phys, self._a_hat, self.cfg,
-                                   self._chan_mean, self._chan_std)
+                a_np, force = lcb_project(a_np, self._env, self._a_nom_hat,
+                                          self.cfg, self._chan_mean,
+                                          self._chan_std, self.filter_stats)
             elif kind == "aggregate":
-                a_np = safe_project(a_np, q_phys, self.cfg)
+                a_np, force = safe_project(a_np, self._env, self.cfg,
+                                           self.filter_stats)
+            # Safety wakes are passed to the environment the controller is
+            # bound to; they override the hysteresis minimum off-dwell.
+            self._env._pending_force = force
         return a_np, raw_np, state, lp_v
+
+    # -----------------------------------------------------------------
+    def risk_cost(self, loss: float, g_tau: float) -> float:
+        """Per-slot quantity the risk critic regresses. The proposed method
+        and CRPO use the RU surrogate g_tau; the expected-cost and return-CVaR
+        baselines override this to use the raw loss."""
+        return g_tau
 
     # -----------------------------------------------------------------
     def update_tau_z_lambda(self, loss: float):
@@ -192,16 +218,18 @@ class SafeRLController:
             alpha_t = cfg.lr_tau / (1.0 + t * 1e-4)
             beta_t = cfg.lr_dual / (1.0 + t * 1e-4)
 
-        # tau subgradient: 1 - (1-beta)^{-1} * 1{loss > tau}
-        # Skip the update if tau is frozen for an ablation.
+        # Risk cost at the PRE-step threshold, g_{tau_t}(t), as in Algorithm
+        # 1. (Up to R2 tau was updated with this slot's loss first, a
+        # same-sample adaptation that biases g downward.)
+        g_tau = self.tau + max(loss - self.tau, 0.0) / (1.0 - cfg.beta)
+
+        # tau subgradient step: 1 - (1-beta)^{-1} * 1{loss > tau}.
+        # Skipped if tau is frozen for an ablation.
         if cfg.fixed_tau < 0:
             ind = 1.0 if loss > self.tau else 0.0
             g_grad = 1.0 - ind / (1.0 - cfg.beta)
             self.tau = float(np.clip(self.tau - alpha_t * g_grad,
                                       0.0, cfg.ell_max))
-
-        # g_tau = tau + (1-beta)^{-1} max(loss - tau, 0)
-        g_tau = self.tau + max(loss - self.tau, 0.0) / (1.0 - cfg.beta)
 
         # Risk virtual queue (diagnostic)
         self.z = max(self.z + g_tau - cfg.Gamma, 0.0)
@@ -236,7 +264,13 @@ class SafeRLController:
         # Derivative term is rectified so it resists increases in the
         # constraint but does not fight decreases.
         d_term = max(delta - self._pid_prev_delta, 0.0)
-        self._pid_I = max(self._pid_I + delta, 0.0)
+        # Integral with anti-windup clamping: the integral is kept in the
+        # range over which it can move lambda below the cap, so a persistent
+        # violation cannot store more integral than the cap can express and
+        # the multiplier leaves saturation as soon as the error turns negative.
+        # (Up to R2 the integral grew without bound while lambda was capped.)
+        i_max = cfg.lam_max / max(cfg.pid_ki, 1e-12)
+        self._pid_I = float(np.clip(self._pid_I + delta, 0.0, i_max))
         lam = (cfg.pid_kp * delta + cfg.pid_ki * self._pid_I
                + cfg.pid_kd * d_term)
         self._pid_prev_delta = delta
@@ -280,7 +314,7 @@ class SafeRLController:
             log_probs[k] = lp
             costs[k] = augmented
             costs_e[k] = cost["energy_W"] * self.cfg.algo.V_energy_weight
-            costs_r[k] = g_tau
+            costs_r[k] = self.risk_cost(cost["loss"], g_tau)
             lams[k] = lam_k
             next_states[k] = self.augment(s_next)
             dones[k] = float(done)
@@ -350,12 +384,13 @@ class SafeRLController:
                                         self.critic_target)
                 adv_r, returns_r = _gae(costs_r, self.critic_r,
                                         self.critic_r_target)
-                # Standardize each channel FIRST, then mix with the dual.
-                # Standardizing the mixture instead (the submitted code path)
-                # divides out lambda, so the constraint loses all influence on
-                # the actor no matter how large the dual grows. The 1/(1+lam)
-                # normalization keeps the mixture bounded while sweeping the
-                # objective from pure energy (lam=0) to pure risk (lam -> inf).
+                # Standardize each channel, then mix with w = lam/(1+lam).
+                # This is a conditioning heuristic, not the gradient of
+                # J_P + lam J_g: the effective multiplier becomes
+                # lam * sd(A_P) / sd(A_g), and any positive weight on the
+                # energy cost (V) cancels in the standardization. It keeps the
+                # actor's step scale fixed while the mixture moves from pure
+                # energy (lam = 0) to pure risk (lam -> inf).
                 w = lams / (1.0 + lams)
                 advs = (1.0 - w) * _std(adv_e) + w * _std(adv_r)
                 advs = _std(advs)

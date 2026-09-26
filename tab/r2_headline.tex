@@ -1,0 +1,28 @@
+\begin{table*}[t]
+  \centering
+  \caption{Controller comparison on the seven-cell cluster at $\Gamma=3.5$, ten test seeds (evaluation traces disjoint from training and from the validation seeds used for tuning). Subscripts are $95\%$ bootstrap intervals over seeds of the per-episode value. $p_{99}$ is the backlog-based delay proxy. $^\dagger$Selected on validation seeds as the lowest-power setting with mean $\mathrm{CVaR}_{0.95}\le\Gamma$; the textbook DPP and sleep-aware rows are the settings closest to the budget, since none meets it. Rows above the rule are non-learning controllers.}
+  \label{tab:headline}
+  \footnotesize
+  \setlength{\tabcolsep}{7pt}
+  \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    Controller & $P$ (W) & $\CVaR_{0.95}$ & $\Pr\{\ell{>}\Gamma\}$ & $p_{99}$ (ms) & tog/min \\
+    \midrule
+    Always-on & $1610.0_{[1610,1610]}$ & $3.050_{[2.93,3.17]}$ & $0.7\%$ & $33$ & $0$ \\
+    Threshold heuristic & $443.3_{[442,445]}$ & $10.000_{[10.00,10.00]}$ & $99.9\%$ & $29.1\!\times\!10^{3}$ & $596$ \\
+    Textbook DPP, $V\!=\!3\!\cdot\!10^{-5}$ & $1314.2_{[1313,1315]}$ & $3.668_{[3.55,3.80]}$ & $2.0\%$ & $36$ & $3195$ \\
+    Backlog-proportional, $\rho\!=\!0.875^\dagger$ & $1151.0_{[1150,1152]}$ & $3.408_{[3.30,3.53]}$ & $1.2\%$ & $36$ & $0$ \\
+    Backlog-proportional, $\rho\!=\!1$ & $1173.8_{[1173,1175]}$ & $3.350_{[3.24,3.47]}$ & $1.1\%$ & $36$ & $0$ \\
+    Backlog-proportional, $\rho\!=\!2$ & $1307.3_{[1307,1308]}$ & $3.146_{[3.03,3.26]}$ & $0.8\%$ & $34$ & $0$ \\
+    Sleep-aware, $q_s\!=\!0.01$ & $1053.4_{[1052,1055]}$ & $3.832_{[3.72,3.96]}$ & $2.7\%$ & $38$ & $2846$ \\
+    \midrule
+    PPO-Lagrangian (expected cost) & $1462.3_{[1434,1492]}$ & $3.681_{[3.36,4.06]}$ & $1.7\%$ & $43$ & $1$ \\
+    CRPO~\cite{Xu_CRPO_ICML2021} & $882.3_{[633,1122]}$ & $8.663_{[7.06,10.00]}$ & $70.4\%$ & $33.9\!\times\!10^{3}$ & $202$ \\
+    WCSAC-GS~\cite{Yang_WCSAC_ML2023}, PPO adaptation & $558.4_{[344,771]}$ & $10.000_{[10.00,10.00]}$ & $92.9\%$ & $58.0\!\times\!10^{3}$ & $130$ \\
+    PPO-Lagrangian + LCB filter & $1393.7_{[1376,1413]}$ & $3.320_{[3.21,3.44]}$ & $1.1\%$ & $36$ & $5$ \\
+    CRPO + LCB filter & $1218.5_{[1189,1250]}$ & $3.717_{[3.65,3.80]}$ & $2.3\%$ & $39$ & $1022$ \\
+    WCSAC-GS + LCB filter & $986.5_{[901,1079]}$ & $5.905_{[5.19,6.54]}$ & $47.7\%$ & $55$ & $5581$ \\
+    \textbf{Proposed} & $1343.6_{[1313,1378]}$ & $3.468_{[3.35,3.61]}$ & $1.5\%$ & $37$ & $53$ \\
+    \bottomrule
+  \end{tabular}
+\end{table*}

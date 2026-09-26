@@ -130,23 +130,28 @@ class ThresholdHeuristic:
 
 
 def run_episode(ctl, env: CellularEnv, cfg: SimCfg, seed: int,
-                stochastic: bool = False) -> dict:
+                stochastic: bool = False, keep_series: bool = False) -> dict:
     """Evaluate any controller for one full episode.
 
     Shared by every experiment so that learned and non-learning controllers
     are measured through identical code. Handles the optional `bind`/`observe`
-    hooks that the LCB safety filter needs for its causal channel and
-    arrival-rate estimates.
+    hooks that the LCB safety filter needs for its causal estimates. With
+    keep_series the per-slot loss, power and backlog are returned too, so any
+    summary can be recomputed later without rerunning.
     """
-    from .metrics import summarize_episode
+    from .metrics import (summarize_episode, empirical_cvar,
+                          empirical_cvar_inclusive)
+    from .safety_filter import new_filter_stats
+    s = env.reset(seed=seed)
     if hasattr(ctl, "bind"):
         ctl.bind(env)
     if hasattr(ctl, "reset"):
         ctl.reset(seed)
-    s = env.reset(seed=seed)
-    P, L, Q, A, AW = [], [], [], [], []
+    if hasattr(ctl, "filter_stats"):
+        ctl.filter_stats = new_filter_stats()
+    P, L, Q, A, AW, SH = [], [], [], [], [], []
     tog = 0
-    off = strand = 0.0
+    off = strand = offered = 0.0
     done = False
     while not done:
         a, _, _, _ = ctl.act(s, env.q, stochastic=stochastic)
@@ -155,14 +160,30 @@ def run_episode(ctl, env: CellularEnv, cfg: SimCfg, seed: int,
             ctl.observe(c)
         P.append(c["energy_W"]); L.append(c["loss"])
         Q.append(c["q_total_Mb"]); A.append(c["arrived_Mb"])
-        AW.append(c["n_awake"]); tog += c["n_toggles"]
+        AW.append(c["n_awake"]); SH.append(c["share_exec"])
+        tog += c["n_toggles"]
         off += c.get("offloaded_Mb", 0.0); strand += c.get("stranded_Mb", 0.0)
-    m = summarize_episode(np.array(P), np.array(L), np.array(Q), np.array(A),
+        offered += c.get("offered_Mb", 0.0)
+    L = np.array(L)
+    m = summarize_episode(np.array(P), L, np.array(Q), np.array(A),
                           toggles=tog, beta=cfg.algo.beta,
                           Gamma=cfg.algo.Gamma, dt_s=cfg.dt_s)
+    m["cvar_beta_inclusive_old"] = empirical_cvar_inclusive(L, cfg.algo.beta)
+    m["cvar_95"] = empirical_cvar(L, 0.95)
+    m["mean_loss"] = float(L.mean())
     m["awake_mean"] = float(np.mean(AW))
-    m["offload_pct"] = 100.0 * off / max(sum(A), 1e-9)
-    m["stranded_pct"] = 100.0 * strand / max(sum(A), 1e-9)
+    m["share_exec_mean"] = float(np.mean(SH))
+    # Percentages of the nominal offered load (not of the inflated effective
+    # workload, which was the denominator up to R2).
+    m["offload_pct"] = 100.0 * off / max(offered, 1e-9)
+    m["stranded_pct"] = 100.0 * strand / max(offered, 1e-9)
+    fs = getattr(ctl, "filter_stats", None)
+    if fs:
+        m["filter"] = dict(fs)
+    if keep_series:
+        m["_series"] = dict(loss=L.astype(np.float32),
+                            power=np.array(P, dtype=np.float32),
+                            backlog=np.array(Q, dtype=np.float32))
     return m
 
 
@@ -198,15 +219,14 @@ class AlwaysOn:
 
 
 class DriftPlusPenalty:
-    """Continuous drift-plus-penalty controller (no learning).
+    """Backlog-proportional share rule (no learning), rho = `slack`.
 
-    Per slot each cell requests exactly the share needed to drain its own
-    backlog, phi_b = clip(slack * q_b / mu_cap, phi_min, 1). This is the
-    interior solution of the per-cell drift-plus-penalty problem, as opposed
-    to the binary bang-bang rule used as the Lyapunov baseline in the
-    submitted version, which chattered at >5000 toggles/min because it could
-    only choose between full service and sleep. `slack` trades tail risk
-    against power and traces the controller's Pareto frontier.
+    Per slot each cell requests the share proportional to its own backlog,
+    phi_b = clip(rho * q_b / mu_cap, phi_min, 1), and never sleeps. This is a
+    heuristic, NOT a drift-plus-penalty minimizer: with affine power and
+    service the per-slot DPP objective is affine in phi and is minimized at an
+    endpoint (see TextbookDPP). Up to R2 it was mislabeled as the interior
+    drift-plus-penalty solution. The class name is kept for compatibility.
     """
     name = "DriftPlusPenalty"
 
@@ -256,6 +276,70 @@ class SleepAwareDrift(DriftPlusPenalty):
         return a, r, s, lp
 
 
+class TextbookDPP:
+    """Per-slot, per-cell drift-plus-penalty minimizer (no learning).
+
+    Each cell minimizes V * P_b + Q_b * (A_b - E[mu_b]) over its options, with
+    the power model of the environment (sleep, or awake at share phi, plus the
+    switching penalty when the sleep state changes) and the mean channel
+    multiplier. Awake cost is affine in phi, so the awake optimum is phi = 1 or
+    the minimum share; sleep serves nothing. V (watts to Mbit^2) trades power
+    against backlog and traces the controller's frontier. Offloading is not
+    anticipated (the per-cell decomposition ignores it), as in the textbook
+    decomposition. Requests respect the environment's hysteresis as any
+    controller's do.
+    """
+    name = "TextbookDPP"
+
+    def __init__(self, cfg: SimCfg, V: float = 1e-3, **kwargs):
+        self.cfg = cfg
+        self.V = V
+        self._m = 1.0
+        self._s = np.ones(cfg.topo.B, dtype=np.int32)
+        self._env = None
+
+    def bind(self, env):
+        self._m = float(np.mean(env.channel_pool))
+        self._env = env
+
+    def reset(self, seed: int = 0):
+        pass
+
+    def act(self, state, q_phys, stochastic: bool = True):
+        c, e = self.cfg, self.cfg.energy
+        mu_cap = c.chan.mu_max_mbps * c.dt_s
+        mu_floor = c.chan.mu_min_mbps * c.dt_s
+        q = np.asarray(q_phys, dtype=np.float64)
+        s_prev = (self._env.s_prev if self._env is not None else self._s)
+        sw_awake = np.where(s_prev == 0, e.p_sw_W, 0.0)
+        sw_sleep = np.where(s_prev == 1, e.p_sw_W, 0.0)
+        wf = np.where(s_prev == 0, getattr(e, "wake_service_frac", 1.0), 1.0)
+
+        def awake_cost(phi):
+            return (self.V * (e.p_on_W + e.p_dyn_W * phi + sw_awake)
+                    - q * wf * (mu_floor + (mu_cap - mu_floor) * phi) * self._m)
+        c_lo = awake_cost(EPS_SLEEP_DPP)
+        c_hi = awake_cost(1.0)
+        c_sleep = self.V * (e.p_slp_W + sw_sleep)
+        phi = np.where(c_hi < c_lo, 1.0, EPS_SLEEP_DPP)
+        best_awake = np.minimum(c_lo, c_hi)
+        a = np.where(c_sleep < best_awake, 0.0, phi).astype(np.float32)
+        return a, np.zeros_like(a), state, 0.0
+
+    def update_tau_z_lambda(self, loss: float):
+        return 0.0
+
+    def update_actor_critic(self, batch):
+        return {"actor_loss": 0.0, "critic_loss": 0.0, "lambda": 0.0,
+                "tau": 0.0, "z": 0.0}
+
+    def collect_rollout(self, env: CellularEnv, n_slots: int):
+        return _model_based_rollout(self, env, n_slots)
+
+
+EPS_SLEEP_DPP = 0.05
+
+
 def make_baseline(name: str, cfg: SimCfg, seed: int) -> object:
     """Factory."""
     if name == "SafeRL":
@@ -276,6 +360,9 @@ def make_baseline(name: str, cfg: SimCfg, seed: int) -> object:
         # "DriftPlusPenalty" or "DriftPlusPenalty:<slack>"
         slack = float(name.split(":")[1]) if ":" in name else 1.0
         return DriftPlusPenalty(cfg, slack=slack)
+    if name.startswith("TextbookDPP"):
+        V = float(name.split(":")[1]) if ":" in name else 1e-3
+        return TextbookDPP(cfg, V=V)
     if name.startswith("SleepAwareDrift"):
         # "SleepAwareDrift" or "SleepAwareDrift:<q_sleep_Mb>"
         qs = float(name.split(":")[1]) if ":" in name else 0.05

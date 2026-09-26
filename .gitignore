@@ -84,3 +84,13 @@ sim/results/rev_cvar_curve.json
 # The current manuscript uses tab/rev_headline.tex; recover this one from the
 # v1.0-tccn-submission tag if needed.
 tab/headline.tex
+
+# R2 round: frozen R1 baseline, bibliography, R2 response letter and diff
+# (private until publication)
+main_r1.tex
+main_r2_*.tex
+refs.bib
+response_letter*
+main_diff*
+# Internal audit of the manuscript (private)
+audit/

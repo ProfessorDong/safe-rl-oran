@@ -48,11 +48,15 @@ def load_channel_multipliers(cfg: SimCfg) -> Tuple[np.ndarray, str]:
     """Return (channel_mult_pool, source_tag).
     channel_mult_pool is a 1-D array to be sampled per-slot per-cell.
     """
+    require = bool(getattr(cfg, "require_real_data", False))
     cache = os.path.join(cfg.data_dir, CACHE_NAME)
     if os.path.exists(cache):
         try:
             d = np.load(cache, allow_pickle=False)
-            return d["pool"], str(d["source"])
+            src = str(d["source"])
+            # A cached synthetic pool must not satisfy require_real_data.
+            if src == "lumos5g" or not require:
+                return d["pool"], src
         except Exception:
             pass
 
@@ -61,6 +65,12 @@ def load_channel_multipliers(cfg: SimCfg) -> Tuple[np.ndarray, str]:
         os.makedirs(cfg.data_dir, exist_ok=True)
         np.savez(cache, pool=real, source=np.array("lumos5g"))
         return real, "lumos5g"
+
+    if require:
+        raise RuntimeError(
+            "require_real_data is set but the Lumos5G trace could not be "
+            f"loaded from {os.path.join(cfg.data_dir, LUMOS_REL)}; refusing to "
+            "substitute a synthetic channel pool.")
 
     # Synthetic fallback: log-normal noise approximating mmWave variation.
     rng = np.random.default_rng(0)

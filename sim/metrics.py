@@ -9,6 +9,30 @@ from typing import Dict, List, Sequence
 
 
 def empirical_cvar(loss: np.ndarray, beta: float) -> float:
+    """Exact CVaR_beta of the empirical distribution of `loss`.
+
+    Uses the Rockafellar-Uryasev form evaluated at the empirical beta-quantile
+    tau*, CVaR = tau* + E[(loss - tau*)_+] / (1 - beta), which weights an atom
+    at the quantile fractionally. The earlier helper averaged every sample at
+    or above the quantile, which overweights such an atom: for 96 zeros and
+    four tens at beta = 0.95 it returned 0.4 instead of 8.
+    """
+    x = np.asarray(loss, dtype=float)
+    if x.size == 0:
+        return 0.0
+    xs = np.sort(x)
+    n = xs.size
+    # Lower empirical quantile: the smallest tau with F(tau) >= beta, which is
+    # a minimizer of the empirical RU objective.
+    k = int(np.ceil(beta * n)) - 1
+    tau = xs[min(max(k, 0), n - 1)]
+    return float(tau + np.maximum(xs - tau, 0.0).sum() / (n * (1.0 - beta)))
+
+
+def empirical_cvar_inclusive(loss: np.ndarray, beta: float) -> float:
+    """The pre-R2 estimator (mean of samples at or above the quantile).
+
+    Kept only so the effect of the correction can be reported."""
     if len(loss) == 0:
         return 0.0
     q = np.quantile(loss, beta)
