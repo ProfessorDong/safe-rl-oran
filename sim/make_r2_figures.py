@@ -34,47 +34,60 @@ def _pt(x, y):
 
 # ------------------------------------------------------------ feasibility
 def fig_feasibility():
+    """Risk-budget screen by trace. Proposition 1 certifies infeasibility on a
+    trace for budgets below that trace's floor, and always-on is a feasible
+    witness on a trace for budgets at or above its value there, so the
+    verdict for a budget holds on every trace only outside the per-trace
+    ranges; the bands show those ranges and the lines the means."""
     f = _j("feasibility.json")
+    r = f["per_seed"]
     g0 = f["gamma0"]["mean"]
-    gao, lo, hi = (f["gamma_ao"][k] for k in ("mean", "lo", "hi"))
+    gao = f["gamma_ao"]["mean"]
+    g0lo, g0hi = min(x["gamma0"] for x in r), max(x["gamma0"] for x in r)
+    aolo, aohi = min(x["gamma_ao"] for x in r), max(x["gamma_ao"] for x in r)
     top = 5.0
+    N = T._num
     b = [r"\begin{tikzpicture}", r"\begin{axis}[",
-         r"  width=210pt, height=44pt,",
-         r"  xmin=0, xmax=" + T._num(top) + r", ymin=0, ymax=1,",
+         r"  width=236pt, height=44pt,",
+         r"  xmin=0, xmax=" + N(top) + r", ymin=0, ymax=1,",
          r"  ytick=\empty, axis y line=none, xlabel={risk budget $\Gamma$},",
          r"  xtick={0,1,2,3,4,5}, grid=none, axis on top]"]
+    # every-trace regions
     b.append(r"\fill[clearned, opacity=0.28] (axis cs:0,0) rectangle (axis cs:"
-             + T._num(g0) + ",1);")
-    b.append(r"\fill[cbandlo, opacity=0.45] (axis cs:" + T._num(g0)
-             + ",0) rectangle (axis cs:" + T._num(gao) + ",1);")
-    b.append(r"\fill[cbandhi, opacity=0.40] (axis cs:" + T._num(gao)
-             + ",0) rectangle (axis cs:" + T._num(top) + ",1);")
-    b.append(r"\draw[clearned, line width=1.0pt] (axis cs:" + T._num(g0)
-             + ",0) -- (axis cs:" + T._num(g0) + ",1);")
-    b.append(r"\fill[cclassical, opacity=0.22] (axis cs:" + T._num(lo)
-             + ",0) rectangle (axis cs:" + T._num(hi) + ",1);")
-    b.append(r"\draw[cclassical, line width=1.0pt] (axis cs:" + T._num(gao)
-             + ",0) -- (axis cs:" + T._num(gao) + ",1);")
+             + N(g0lo) + ",1);")
+    b.append(r"\fill[cbandlo, opacity=0.45] (axis cs:" + N(g0hi)
+             + ",0) rectangle (axis cs:" + N(aolo) + ",1);")
+    b.append(r"\fill[cbandhi, opacity=0.40] (axis cs:" + N(aohi)
+             + ",0) rectangle (axis cs:" + N(top) + ",1);")
+    # per-trace ranges (verdict differs across traces) and means
+    b.append(r"\fill[clearned, opacity=0.55] (axis cs:" + N(g0lo)
+             + ",0) rectangle (axis cs:" + N(g0hi) + ",1);")
+    b.append(r"\fill[cclassical, opacity=0.30] (axis cs:" + N(aolo)
+             + ",0) rectangle (axis cs:" + N(aohi) + ",1);")
+    b.append(r"\draw[clearned!60!black, line width=0.6pt] (axis cs:" + N(g0)
+             + ",0) -- (axis cs:" + N(g0) + ",1);")
+    b.append(r"\draw[cclassical!70!black, line width=0.6pt] (axis cs:" + N(gao)
+             + ",0) -- (axis cs:" + N(gao) + ",1);")
     b.append(r"\draw[black, densely dotted, line width=1.0pt] (axis cs:3,0)"
              r" -- (axis cs:3,1);")
     b.append(r"\draw[cproposed, dashed, line width=1.0pt] (axis cs:3.5,0)"
              r" -- (axis cs:3.5,1);")
-    b.append(r"\node[font=\figlab, align=center] at (axis cs:" + T._num(g0 / 2)
-             + r",0.60) {certified\\infeasible};")
+    b.append(r"\node[font=\figlab, align=center] at (axis cs:" + N(g0lo / 2)
+             + r",0.62) {infeasible on\\every trace};")
     b.append(r"\node[font=\fignote, align=center] at (axis cs:"
-             + T._num((g0 + gao) / 2 - 0.12) + r",0.58) {undeter-\\mined};")
+             + N((g0hi + aolo) / 2) + r",0.62) {undeter-\\mined};")
     b.append(r"\node[font=\figlab, align=center] at (axis cs:"
-             + T._num((gao + top) / 2 + 0.2) + r",0.60) {feasible\\(witness)};")
-    b.append(r"\node[font=\figlab, anchor=east, inner sep=1pt] at (axis cs:"
-             + T._num(g0 - 0.08) + r",0.14) {$\Gamma_0{=}" + f"{g0:.2f}"
-             + r"$};")
-    b.append(r"\node[font=\figlab, anchor=west, inner sep=1pt] at (axis cs:"
-             + T._num(hi + 0.04) + r",0.14) {$\Gamma_{\mathrm{AO}}{=}"
-             + f"{gao:.2f}" + r"$};")
-    b.append(r"\node[font=\fignote, anchor=north east] at (axis cs:2.97,0.99)"
-             r" {$\Gamma{=}3$};")
-    b.append(r"\node[font=\fignote, anchor=north west, text=cproposed] at"
-             r" (axis cs:3.55,0.99) {adopted};")
+             + N((aohi + top) / 2 + 0.15) + r",0.62) {witness on\\every trace};")
+    b.append(r"\node[font=\fignote, anchor=east, inner sep=1pt] at (axis cs:"
+             + N(g0lo - 0.05) + r",0.16) {$\Gamma_0\in[" + f"{g0lo:.2f},{g0hi:.2f}"
+             + r"]$};")
+    b.append(r"\node[font=\fignote, anchor=west, inner sep=1pt] at (axis cs:"
+             + N(3.58) + r",0.16) {$\Gamma_{\mathrm{AO}}\in[" + f"{aolo:.2f},{aohi:.2f}"
+             + r"]$};")
+    b.append(r"\node[font=\fignote, anchor=north east, inner sep=1pt] at"
+             r" (axis cs:2.97,0.97) {$\Gamma{=}3$};")
+    b.append(r"\node[font=\fignote, anchor=north west, inner sep=1pt,"
+             r" text=cproposed!80!black] at (axis cs:3.55,0.97) {adopted};")
     b += [r"\end{axis}", r"\end{tikzpicture}"]
     T._write_and_compile("r2f_feasibility", "\n".join(b))
 
@@ -131,10 +144,10 @@ def fig_pareto():
     b.append(r"\addlegendentry{classical}")
     b.append(r"\addplot[only marks, mark=triangle*, clearned, mark size=1.7pt]"
              r" coordinates {" + pts(raw) + "};")
-    b.append(r"\addlegendentry{prior safe RL}")
+    b.append(r"\addlegendentry{prior RL}")
     b.append(r"\addplot[only marks, mark=triangle, clearned, mark size=1.7pt,"
              r" line width=0.6pt] coordinates {" + pts(filt) + "};")
-    b.append(r"\addlegendentry{${+}$filter}")
+    b.append(r"\addlegendentry{prior RL${+}$filter}")
     b.append(r"\addplot[only marks, mark=star, cproposed, mark size=2.6pt,"
              r" line width=0.7pt] coordinates {" + pts(prop) + "};")
     b.append(r"\addlegendentry{proposed}")
@@ -144,22 +157,27 @@ def fig_pareto():
     zx = [p[0] for p in zoom]
     b.append(r"\nextgroupplot[title={vs.\ classical families}, xmin="
              + T._num(min(zx) - 60) + ", xmax=" + T._num(max(zx) + 60)
-             + ", ymin=2.95, ymax=6.2, ytick={3,4,5,6}]")
+             + ", ymin=2.85, ymax=6.2, ytick={3,4,5,6}]")
     b.append(r"\addplot[cclassical, mark=*, mark size=0.9pt] coordinates {"
              + curve("DriftPlusPenalty", RHO_GRID) + "};")
     b.append(r"\addlegendentry{backlog-prop., $\rho$}")
     b.append(r"\addplot[clight, mark=square*, mark size=0.9pt] coordinates {"
              + curve("SleepAwareDrift", QS_GRID) + "};")
     b.append(r"\addlegendentry{sleep-aware, $q_s$}")
-    b.append(r"\addplot[cref, mark=diamond*, mark size=1.1pt] coordinates {"
+    b.append(r"\addplot[black!70, mark=diamond*, mark size=1.1pt] coordinates {"
              + curve("TextbookDPP", V_GRID) + "};")
     b.append(r"\addlegendentry{textbook DPP, $V$}")
     b.append(r"\addplot[only marks, mark=triangle, clearned, mark size=1.7pt,"
              r" line width=0.6pt] coordinates {" + pts(filt) + "};")
-    b.append(r"\addlegendentry{prior RL${+}$filt.}")
+    b.append(r"\addlegendentry{prior RL${+}$filter}")
     b.append(r"\addplot[only marks, mark=star, cproposed, mark size=2.8pt,"
              r" line width=0.7pt] coordinates {" + pts(prop) + "};")
     b.append(r"\addlegendentry{proposed}")
+    # Validation-selected member of each family (the rows of Table II).
+    sel_pts = [cxy(n) for n in (heads[2], heads[3], heads[6])]
+    b.append(r"\addplot[only marks, mark=o, mark size=2.6pt, black,"
+             r" line width=0.5pt] coordinates {" + pts(sel_pts) + "};")
+    b.append(r"\addlegendentry{val.-selected}")
     b.append(r"\addplot[cref, dashed, line width=0.6pt, forget plot] coordinates {"
              + _pt(min(zx) - 60, 3.5) + " " + _pt(max(zx) + 60, 3.5) + "};")
     b += [r"\end{groupplot}", r"\end{tikzpicture}"]
@@ -172,14 +190,16 @@ def fig_filter():
     bars = [("none", _L(d, "SafeRL-none")), ("aggr.", _L(d, "SafeRL-aggr")),
             ("LCB", _L(d, "SafeRL")),
             ("bypass", _L(d, "SafeRL", mode="bypass"))]
-    cols = ["cref", "clearned", "cproposed", "clight"]
+    # Gray is the unfiltered reference (as the dashed line on the right);
+    # red is kept for prior RL methods in the other figures.
+    cols = ["cref", "cbandlo!85!black", "cproposed", "clight"]
     b = [r"\begin{tikzpicture}", r"\begin{groupplot}[",
          r"  group style={group size=2 by 1, horizontal sep=30pt},",
          r"  width=88pt, height=45pt, ylabel={$\mathrm{CVaR}_{0.95}(\ell)$}]"]
-    b.append(r"\nextgroupplot[title={filter realization}, ybar, bar width=8pt,"
+    b.append(r"\nextgroupplot[title={filter variant}, ybar, bar width=8pt,"
              r" xmin=-0.6, xmax=3.6, ymin=0, ymax=11, xtick={0,1,2,3},"
              r" xticklabels={" + ",".join(n for n, _ in bars) + r"},"
-             r" xticklabel style={font=\fignote}, ytick={0,2,4,6,8,10}]")
+             r" ytick={0,2,4,6,8,10}]")
     for i, ((_, m), col) in enumerate(zip(bars, cols)):
         cv = m["cvar_beta"]
         b.append("\\addplot[fill=" + col + ", draw=" + col + ", bar shift=0pt,"
@@ -227,7 +247,7 @@ def fig_sensitivity():
     for idx, (knob, pts, lab) in enumerate(panels):
         xs = list(range(len(pts)))
         c95 = [_L(d, n)["cvar_95"] for n, _ in pts]
-        allv = [v for c in c95 for v in (c["lo"], c["hi"])]
+        allv = [v for c in c95 for v in (c["lo"], c["hi"])] + [3.5]
         cb = None
         if knob == "beta":
             cb = [_L(d, n)["cvar_beta"] for n, _ in pts]
@@ -250,6 +270,14 @@ def fig_sensitivity():
             b.append(T._errplot("clearned, mark=triangle*, dashed", xs,
                                 [c["mean"] for c in cb], [c["lo"] for c in cb],
                                 [c["hi"] for c in cb]))
+        # Budget, and the default setting (the proposed controller) circled.
+        b.append(r"\addplot[cref, densely dotted, line width=0.6pt, forget plot]"
+                 r" coordinates {" + _pt(-0.35, 3.5) + " "
+                 + _pt(len(pts) - 0.65, 3.5) + "};")
+        k0 = [n for n, _ in pts].index("SafeRL")
+        b.append(r"\addplot[only marks, mark=o, mark size=3pt, black,"
+                 r" line width=0.5pt, forget plot] coordinates {"
+                 + _pt(k0, c95[k0]["mean"]) + "};")
     b += [r"\end{groupplot}", r"\end{tikzpicture}"]
     T._write_and_compile("r2f_sensitivity", "\n".join(b))
 
@@ -278,7 +306,8 @@ def fig_theory():
               ("allsleep", "True", "cclassical"),
               ("untrained", "False", "clearned"),
               ("allsleep", "False", "cref")]
-    b.append(r"\nextgroupplot[title={stress test}, ymode=log, xlabel={base rate},"
+    b.append(r"\nextgroupplot[title={stress test}, ymode=log,"
+             r" xlabel={busy-hour rate (Mb/slot)},"
              r" ylabel={$\bar Q$ (Mb)}, xmin=0.25, xmax=0.75,"
              r" xtick={0.3,0.5,0.7}, ymin=1, ymax=5e4, ytick={1e0,1e2,1e4},"
              r" yminorticks=false,"
@@ -308,8 +337,8 @@ def fig_theory():
              + " ".join(_pt(k, y) for k, y in zip(Ks, p99)) + "};")
     b.append(r"\addplot[clearned, dashed, forget plot] coordinates"
              r" {(0,10000) (68,10000)};")
-    b.append(r"\node[font=\fignote, text=clearned, anchor=south east] at"
-             r" (axis cs:66,10000) {10\,ms};")
+    b.append(r"\node[font=\fignote, text=clearned, anchor=north east] at"
+             r" (axis cs:66,9000) {10\,ms};")
     b += [r"\end{groupplot}", r"\end{tikzpicture}"]
     T._write_and_compile("r2f_theory", "\n".join(b))
 

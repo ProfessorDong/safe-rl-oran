@@ -9,18 +9,21 @@
     Quantity & Analysis & Implementation \\
     \midrule
     Actor, critic steps & diminishing & constant (Adam) \\
-    Threshold step & diminishing & $\zeta_t=10^{-2}/(1{+}10^{-4}t)$ \\
+    Threshold step & diminishing, $\zeta_t/\nu_t\to c$ & $\zeta_t=10^{-2}/(1{+}10^{-4}t)$, $\lambda$ by PID \\
     Dual update & integral, \eqref{eq:dual_update} & PID, \eqref{eq:pid_dual}, anti-windup \\
     Dual cap & $\lambda_{\max}$ & $\lambda_{\max}\!=\!50$ \\
     Advantage & exact, unstandardized & GAE, standardized, \eqref{eq:adv_mix} \\
     Actor update & gradient step & PPO clipped ratio \\
-    Conditioning & $X(t)$ & $X(t),\lambda,\tau$ \\
+    Conditioning & $X(t)$ & partial observation, $\lambda,\tau$ \\
     Safety filter & drift condition \eqref{eq:exec_drift} & LCB projection or joint fallback \\
     Arrival estimate & $\widehat a\ge\E[A\mid X,a]$ & causal EWMA, not a certified bound \\
-    Queue bound & if \eqref{eq:exec_drift} holds & margin met, estimated, in $\ge98.5\%$ \\
+    Queue bound & if \eqref{eq:exec_drift} holds & estimated margin met in $100\%$ \\
+     & & (stress test: $\ge98.5\%$) of activations \\
     Convergence & stationary points only & not proved \\
     Timescales & critic, actor, then $\lambda,\tau$ & $\tau$ per slot, others per rollout \\
-    CVaR result & $\le\Gamma$ (conditional) & $3.468$ at $\Gamma\!=\!3.5$ \\
+    State law & ergodic limit where used & one day in $10^4$ slots, \\
+     & (Assumption~\ref{ass:radio}) & cold start \\
+    CVaR result & $\le\Gamma$ (conditional) & mean $3.468$, interval $[3.35,3.61]$ \\
     \bottomrule
   \end{tabular}
 \end{table}

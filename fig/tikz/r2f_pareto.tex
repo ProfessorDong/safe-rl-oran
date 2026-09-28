@@ -53,23 +53,25 @@
 \addplot[only marks, mark=*, cclassical] coordinates {(1610,3.05008) (443.264,10) (1373.28,3.25205) (1150.98,3.40799) (1173.79,3.34984) (1307.29,3.14567) (1053.43,3.83152)};
 \addlegendentry{classical}
 \addplot[only marks, mark=triangle*, clearned, mark size=1.7pt] coordinates {(1462.27,3.68079) (882.262,8.66282) (1508.07,5.89937)};
-\addlegendentry{prior safe RL}
+\addlegendentry{prior RL}
 \addplot[only marks, mark=triangle, clearned, mark size=1.7pt, line width=0.6pt] coordinates {(1393.7,3.3204) (1218.49,3.71702) (1442.96,3.72676)};
-\addlegendentry{${+}$filter}
+\addlegendentry{prior RL${+}$filter}
 \addplot[only marks, mark=star, cproposed, mark size=2.6pt, line width=0.7pt] coordinates {(1343.63,3.46829)};
 \addlegendentry{proposed}
 \addplot[cref, dashed, line width=0.6pt, forget plot] coordinates {(363.264,3.5) (1690,3.5)};
-\nextgroupplot[title={vs.\ classical families}, xmin=993.432, xmax=1670, ymin=2.95, ymax=6.2, ytick={3,4,5,6}]
+\nextgroupplot[title={vs.\ classical families}, xmin=993.432, xmax=1670, ymin=2.85, ymax=6.2, ytick={3,4,5,6}]
 \addplot[cclassical, mark=*, mark size=0.9pt] coordinates {(1054.01,5.69563) (1075.92,3.7963) (1101.51,3.60356) (1126.79,3.4875) (1150.98,3.40799) (1173.79,3.34984) (1214.96,3.26937) (1250.44,3.21514) (1307.29,3.14567) (1376.74,3.08276) (1423.48,3.05822)};
 \addlegendentry{backlog-prop., $\rho$}
 \addplot[clight, mark=square*, mark size=0.9pt] coordinates {(830.841,7.47225) (926.866,4.95298) (1008.34,4.06503) (1034.72,3.91572) (1052.65,3.83674) (1053.43,3.83152)};
 \addlegendentry{sleep-aware, $q_s$}
-\addplot[cref, mark=diamond*, mark size=1.1pt] coordinates {(522.635,10) (693.99,9.77957) (1072.07,5.72492) (1148.16,4.76015) (1219.41,4.3673) (1272.76,4.00074) (1327.17,3.54543) (1373.28,3.25205) (1416.73,3.13054) (1449.38,3.07603) (1479.31,3.05882) (1497.49,3.05532) (1500.2,3.05432) (1500.53,3.05509) (1500.54,3.05432)};
+\addplot[black!70, mark=diamond*, mark size=1.1pt] coordinates {(522.635,10) (693.99,9.77957) (1072.07,5.72492) (1148.16,4.76015) (1219.41,4.3673) (1272.76,4.00074) (1327.17,3.54543) (1373.28,3.25205) (1416.73,3.13054) (1449.38,3.07603) (1479.31,3.05882) (1497.49,3.05532) (1500.2,3.05432) (1500.53,3.05509) (1500.54,3.05432)};
 \addlegendentry{textbook DPP, $V$}
 \addplot[only marks, mark=triangle, clearned, mark size=1.7pt, line width=0.6pt] coordinates {(1393.7,3.3204) (1218.49,3.71702) (1442.96,3.72676)};
-\addlegendentry{prior RL${+}$filt.}
+\addlegendentry{prior RL${+}$filter}
 \addplot[only marks, mark=star, cproposed, mark size=2.8pt, line width=0.7pt] coordinates {(1343.63,3.46829)};
 \addlegendentry{proposed}
+\addplot[only marks, mark=o, mark size=2.6pt, black, line width=0.5pt] coordinates {(1373.28,3.25205) (1150.98,3.40799) (1053.43,3.83152)};
+\addlegendentry{val.-selected}
 \addplot[cref, dashed, line width=0.6pt, forget plot] coordinates {(993.432,3.5) (1670,3.5)};
 \end{groupplot}
 \end{tikzpicture}

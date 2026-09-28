@@ -1,6 +1,6 @@
 \begin{table*}[t]
   \centering
-  \caption{Controller comparison on the seven-cell cluster at $\Gamma=3.5$, ten test seeds (evaluation traces disjoint from training and from the validation seeds used for tuning). Subscripts are $95\%$ bootstrap intervals over seeds of the per-episode value. $p_{99}$ is the backlog-based delay proxy. $^\dagger$Selected on validation seeds as the lowest-power setting with mean $\mathrm{CVaR}_{0.95}\le\Gamma$; the sleep-aware row is the setting closest to the budget, since none meets it. Rows above the learned methods are non-learning controllers.}
+  \caption{Controller comparison at $\Gamma=3.5$ on ten test seeds (traces disjoint from training and validation). Subscripts: $95\%$ bootstrap intervals over seeds. $\mathrm{CVaR}_{0.95}$: seed mean of the empirical CVaR of per-slot loss ($10$ is the loss cap); $\Pr\{\ell{>}\Gamma\}$: fraction of slots above the budget; $p_{99}$: backlog-based delay proxy; tog/min: cluster toggle rate. $^\dagger$Selected on validation seeds as the lowest-power setting with mean $\mathrm{CVaR}_{0.95}\le\Gamma$; the sleep-aware row is closest to the budget, as none meets it. Rows above the learned methods are non-learning.}
   \label{tab:headline}
   \footnotesize
   \setlength{\tabcolsep}{7pt}
@@ -16,7 +16,7 @@
     Backlog-proportional, $\rho\!=\!2$ & $1307.3_{[1307,1308]}$ & $3.146_{[3.03,3.26]}$ & $0.8\%$ & $34$ & $0$ \\
     Sleep-aware, $q_s\!=\!0.01$ & $1053.4_{[1052,1055]}$ & $3.832_{[3.72,3.96]}$ & $2.7\%$ & $38$ & $2846$ \\
     \midrule
-    PPO-Lagrangian (expected cost) & $1462.3_{[1434,1492]}$ & $3.681_{[3.36,4.06]}$ & $1.7\%$ & $43$ & $1$ \\
+    PPO-Lagrangian~\cite{Ray_SafetyGym2019} (expected cost) & $1462.3_{[1434,1492]}$ & $3.681_{[3.36,4.06]}$ & $1.7\%$ & $43$ & $1$ \\
     CRPO~\cite{Xu_CRPO_ICML2021} & $882.3_{[633,1122]}$ & $8.663_{[7.06,10.00]}$ & $70.4\%$ & $33.9\!\times\!10^{3}$ & $202$ \\
     WCSAC-GS~\cite{Yang_WCSAC_ML2023}, PPO adaptation & $1508.1_{[1446,1568]}$ & $5.899_{[3.87,7.97]}$ & $39.9\%$ & $1.1\!\times\!10^{3}$ & $72$ \\
     PPO-Lagrangian + LCB filter & $1393.7_{[1376,1413]}$ & $3.320_{[3.21,3.44]}$ & $1.1\%$ & $36$ & $5$ \\

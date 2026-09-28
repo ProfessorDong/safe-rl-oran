@@ -93,7 +93,7 @@ def main():
             (lab_rho("x:2.0"), c["DriftPlusPenalty:2.0"]),
             (f"Sleep-aware, $q_s\\!=\\!{float(sel_qs.split(':')[1]):g}$",
              c[sel_qs])]
-    learned = [("PPO-Lagrangian (expected cost)", L("LagPPO")),
+    learned = [("PPO-Lagrangian~\\cite{Ray_SafetyGym2019} (expected cost)", L("LagPPO")),
                ("CRPO~\\cite{Xu_CRPO_ICML2021}", L("CRPO")),
                ("WCSAC-GS~\\cite{Yang_WCSAC_ML2023}, PPO adaptation", L("WCSAC")),
                ("PPO-Lagrangian + LCB filter", L("LagPPO+F")),
@@ -101,17 +101,17 @@ def main():
                ("WCSAC-GS + LCB filter", L("WCSAC+F")),
                ("\\textbf{Proposed}", L("SafeRL"))]
     lines = [r"\begin{table*}[t]", r"  \centering",
-             r"  \caption{Controller comparison on the seven-cell cluster at "
-             r"$\Gamma=3.5$, ten test seeds (evaluation traces disjoint from "
-             r"training and from the validation seeds used for tuning). "
-             r"Subscripts are $95\%$ bootstrap intervals over seeds of the "
-             r"per-episode value. $p_{99}$ is the backlog-based delay proxy. "
-             r"$^\dagger$Selected on validation seeds as the lowest-power "
-             r"setting with mean $\mathrm{CVaR}_{0.95}\le\Gamma$; "
-             + ("the sleep-aware row is the setting closest to the budget, "
-                "since none meets it. " if not ok_qs else "")
-             + r"Rows above the learned methods are non-learning "
-             r"controllers.}",
+             r"  \caption{Controller comparison at $\Gamma=3.5$ on ten test seeds "
+             r"(traces disjoint from training and validation). Subscripts: "
+             r"$95\%$ bootstrap intervals over seeds. $\mathrm{CVaR}_{0.95}$: "
+             r"seed mean of the empirical CVaR of per-slot loss ($10$ is the "
+             r"loss cap); $\Pr\{\ell{>}\Gamma\}$: fraction of slots above the "
+             r"budget; $p_{99}$: backlog-based delay proxy; tog/min: cluster "
+             r"toggle rate. $^\dagger$Selected on validation seeds as the "
+             r"lowest-power setting with mean $\mathrm{CVaR}_{0.95}\le\Gamma$"
+             + ("; the sleep-aware row is closest to the budget, as none "
+                "meets it" if not ok_qs else "")
+             + r". Rows above the learned methods are non-learning.}",
              r"  \label{tab:headline}", r"  \footnotesize",
              r"  \setlength{\tabcolsep}{7pt}",
              r"  \begin{tabular}{@{}lccccc@{}}", r"    \toprule",

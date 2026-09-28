@@ -67,6 +67,8 @@ x y ep em
 2 4.99148 0.468853 0.415879
 };
 
+\addplot[cref, densely dotted, line width=0.6pt, forget plot] coordinates {(-0.35,3.5) (2.35,3.5)};
+\addplot[only marks, mark=o, mark size=3pt, black, line width=0.5pt, forget plot] coordinates {(1,3.46829)};
 \nextgroupplot[title={LCB conservatism $\kappa$},
   xmin=-0.35, xmax=3.35, ymin=2.89852, ymax=7.20622, xtick={0,1,2,3}, xticklabels={0,0.5,1,2}, xticklabel style={font=\fignote}, yticklabel style={font=\fignote}, ylabel style={font=\fignote}]
 \addplot[cproposed, mark=*, error bars/.cd, y dir=both, y explicit,
@@ -79,6 +81,8 @@ x y ep em
 3 3.44958 0.147945 0.134185
 };
 
+\addplot[cref, densely dotted, line width=0.6pt, forget plot] coordinates {(-0.35,3.5) (3.35,3.5)};
+\addplot[only marks, mark=o, mark size=3pt, black, line width=0.5pt, forget plot] coordinates {(2,3.46829)};
 \nextgroupplot[title={threshold $q_0$ (Mb)},
   ylabel={$\mathrm{CVaR}$},
   xmin=-0.35, xmax=2.35, ymin=3.30059, ymax=3.69789, xtick={0,1,2}, xticklabels={0.25,1,4}, xticklabel style={font=\fignote}, yticklabel style={font=\fignote}, ylabel style={font=\fignote}]
@@ -91,6 +95,8 @@ x y ep em
 2 3.47416 0.146576 0.135126
 };
 
+\addplot[cref, densely dotted, line width=0.6pt, forget plot] coordinates {(-0.35,3.5) (2.35,3.5)};
+\addplot[only marks, mark=o, mark size=3pt, black, line width=0.5pt, forget plot] coordinates {(1,3.46829)};
 \nextgroupplot[title={dual cap $\lambda_{\max}$},
   xmin=-0.35, xmax=2.35, ymin=3.26898, ymax=3.68136, xtick={0,1,2}, xticklabels={10,50,200}, xticklabel style={font=\fignote}, yticklabel style={font=\fignote}, ylabel style={font=\fignote}]
 \addplot[cproposed, mark=*, error bars/.cd, y dir=both, y explicit,
@@ -102,6 +108,8 @@ x y ep em
 2 3.48507 0.156379 0.152333
 };
 
+\addplot[cref, densely dotted, line width=0.6pt, forget plot] coordinates {(-0.35,3.5) (2.35,3.5)};
+\addplot[only marks, mark=o, mark size=3pt, black, line width=0.5pt, forget plot] coordinates {(1,3.46829)};
 \end{groupplot}
 \end{tikzpicture}
 \end{document}

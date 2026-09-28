@@ -45,25 +45,26 @@
 \begin{document}
 \begin{tikzpicture}
 \begin{axis}[
-  width=210pt, height=44pt,
+  width=236pt, height=44pt,
   xmin=0, xmax=5, ymin=0, ymax=1,
   ytick=\empty, axis y line=none, xlabel={risk budget $\Gamma$},
   xtick={0,1,2,3,4,5}, grid=none, axis on top]
-\fill[clearned, opacity=0.28] (axis cs:0,0) rectangle (axis cs:2.01856,1);
-\fill[cbandlo, opacity=0.45] (axis cs:2.01856,0) rectangle (axis cs:3.05008,1);
-\fill[cbandhi, opacity=0.40] (axis cs:3.05008,0) rectangle (axis cs:5,1);
-\draw[clearned, line width=1.0pt] (axis cs:2.01856,0) -- (axis cs:2.01856,1);
-\fill[cclassical, opacity=0.22] (axis cs:2.93411,0) rectangle (axis cs:3.16976,1);
-\draw[cclassical, line width=1.0pt] (axis cs:3.05008,0) -- (axis cs:3.05008,1);
+\fill[clearned, opacity=0.28] (axis cs:0,0) rectangle (axis cs:1.97372,1);
+\fill[cbandlo, opacity=0.45] (axis cs:2.06071,0) rectangle (axis cs:2.82625,1);
+\fill[cbandhi, opacity=0.40] (axis cs:3.43841,0) rectangle (axis cs:5,1);
+\fill[clearned, opacity=0.55] (axis cs:1.97372,0) rectangle (axis cs:2.06071,1);
+\fill[cclassical, opacity=0.30] (axis cs:2.82625,0) rectangle (axis cs:3.43841,1);
+\draw[clearned!60!black, line width=0.6pt] (axis cs:2.01856,0) -- (axis cs:2.01856,1);
+\draw[cclassical!70!black, line width=0.6pt] (axis cs:3.05008,0) -- (axis cs:3.05008,1);
 \draw[black, densely dotted, line width=1.0pt] (axis cs:3,0) -- (axis cs:3,1);
 \draw[cproposed, dashed, line width=1.0pt] (axis cs:3.5,0) -- (axis cs:3.5,1);
-\node[font=\figlab, align=center] at (axis cs:1.00928,0.60) {certified\\infeasible};
-\node[font=\fignote, align=center] at (axis cs:2.41432,0.58) {undeter-\\mined};
-\node[font=\figlab, align=center] at (axis cs:4.22504,0.60) {feasible\\(witness)};
-\node[font=\figlab, anchor=east, inner sep=1pt] at (axis cs:1.93856,0.14) {$\Gamma_0{=}2.02$};
-\node[font=\figlab, anchor=west, inner sep=1pt] at (axis cs:3.20976,0.14) {$\Gamma_{\mathrm{AO}}{=}3.05$};
-\node[font=\fignote, anchor=north east] at (axis cs:2.97,0.99) {$\Gamma{=}3$};
-\node[font=\fignote, anchor=north west, text=cproposed] at (axis cs:3.55,0.99) {adopted};
+\node[font=\figlab, align=center] at (axis cs:0.986858,0.62) {infeasible on\\every trace};
+\node[font=\fignote, align=center] at (axis cs:2.44348,0.62) {undeter-\\mined};
+\node[font=\figlab, align=center] at (axis cs:4.3692,0.62) {witness on\\every trace};
+\node[font=\fignote, anchor=east, inner sep=1pt] at (axis cs:1.92372,0.16) {$\Gamma_0\in[1.97,2.06]$};
+\node[font=\fignote, anchor=west, inner sep=1pt] at (axis cs:3.58,0.16) {$\Gamma_{\mathrm{AO}}\in[2.83,3.44]$};
+\node[font=\fignote, anchor=north east, inner sep=1pt] at (axis cs:2.97,0.97) {$\Gamma{=}3$};
+\node[font=\fignote, anchor=north west, inner sep=1pt, text=cproposed!80!black] at (axis cs:3.55,0.97) {adopted};
 \end{axis}
 \end{tikzpicture}
 \end{document}

@@ -47,13 +47,13 @@
 \begin{groupplot}[
   group style={group size=2 by 1, horizontal sep=30pt},
   width=88pt, height=45pt, ylabel={$\mathrm{CVaR}_{0.95}(\ell)$}]
-\nextgroupplot[title={filter realization}, ybar, bar width=8pt, xmin=-0.6, xmax=3.6, ymin=0, ymax=11, xtick={0,1,2,3}, xticklabels={none,aggr.,LCB,bypass}, xticklabel style={font=\fignote}, ytick={0,2,4,6,8,10}]
+\nextgroupplot[title={filter variant}, ybar, bar width=8pt, xmin=-0.6, xmax=3.6, ymin=0, ymax=11, xtick={0,1,2,3}, xticklabels={none,aggr.,LCB,bypass}, ytick={0,2,4,6,8,10}]
 \addplot[fill=cref, draw=cref, bar shift=0pt, error bars/.cd, y dir=both, y explicit, error bar style={line width=0.4pt, black}, error mark options={line width=0.4pt, mark size=1pt, black}]
   table[x=x, y=y, y error plus=ep, y error minus=em] {
 x y ep em
 0 9.35982 0.640181 1.28036
 };
-\addplot[fill=clearned, draw=clearned, bar shift=0pt, error bars/.cd, y dir=both, y explicit, error bar style={line width=0.4pt, black}, error mark options={line width=0.4pt, mark size=1pt, black}]
+\addplot[fill=cbandlo!85!black, draw=cbandlo!85!black, bar shift=0pt, error bars/.cd, y dir=both, y explicit, error bar style={line width=0.4pt, black}, error mark options={line width=0.4pt, mark size=1pt, black}]
   table[x=x, y=y, y error plus=ep, y error minus=em] {
 x y ep em
 1 8.09487 1.31365 1.90513
