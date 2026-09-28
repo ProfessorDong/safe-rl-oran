@@ -3,7 +3,7 @@ arrivals.py
 -----------
 Per-cell arrival-rate loader. Three sources, in priority order:
 
-  1. Shanghai Telecom (Yu et al. 2019, 6-month session-level dataset from
+  1. Shanghai Telecom (Wang et al., IEEE TMC 2021, 6-month session-level dataset from
      a major Chinese city; per-row (start, end, lat, lon, user_id)).
      Aggregates session-start counts per cell per hour into a (B, 24)
      diurnal profile.

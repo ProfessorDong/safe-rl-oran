@@ -100,7 +100,17 @@ def fig_pareto():
                           if f"{prefix}:{k}" in c))
 
     from .r2 import RHO_GRID, QS_GRID, V_GRID
-    classical = [cxy(n) for n in c["_headline"] if n in c]
+    # The same classical rows as Table II: validation-selected members of each
+    # family (c["_headline"] predates validation selection and omits DPP).
+    from .make_r2_tables import _closest
+    cal = _j("calibration.json")
+    heads = ["AlwaysOn", "Threshold",
+             _closest(cal["val_grid"], "TextbookDPP")[0],
+             _closest(cal["val_grid"], "DriftPlusPenalty")[0],
+             "DriftPlusPenalty:1.0", "DriftPlusPenalty:2.0",
+             _closest(cal["val_grid"], "SleepAwareDrift")[0]]
+    classical = [cxy(n) for n in heads if n in c]
+    assert len(classical) == len(heads), heads
     raw = [lxy(n) for n in ("LagPPO", "CRPO", "WCSAC")]
     filt = [lxy(n) for n in ("LagPPO+F", "CRPO+F", "WCSAC+F")]
     prop = [lxy("SafeRL")]
@@ -268,7 +278,7 @@ def fig_theory():
               ("allsleep", "True", "cclassical"),
               ("untrained", "False", "clearned"),
               ("allsleep", "False", "cref")]
-    b.append(r"\nextgroupplot[title={Theorem 1}, ymode=log, xlabel={base rate},"
+    b.append(r"\nextgroupplot[title={stress test}, ymode=log, xlabel={base rate},"
              r" ylabel={$\bar Q$ (Mb)}, xmin=0.25, xmax=0.75,"
              r" xtick={0.3,0.5,0.7}, ymin=1, ymax=5e4, ytick={1e0,1e2,1e4},"
              r" yminorticks=false,"

@@ -16,6 +16,7 @@ Three baselines for comparison against the proposed Safe-RL controller:
                           baseline.
 """
 from __future__ import annotations
+import itertools
 import numpy as np
 from .config import SimCfg
 from .env import CellularEnv
@@ -137,7 +138,9 @@ def run_episode(ctl, env: CellularEnv, cfg: SimCfg, seed: int,
     are measured through identical code. Handles the optional `bind`/`observe`
     hooks that the LCB safety filter needs for its causal estimates. With
     keep_series the per-slot loss, power and backlog are returned too, so any
-    summary can be recomputed later without rerunning.
+    summary based on those three series can be recomputed later without
+    rerunning (delay-proxy, toggle, share and filter statistics need a
+    replay).
     """
     from .metrics import (summarize_episode, empirical_cvar,
                           empirical_cvar_inclusive)
@@ -277,53 +280,93 @@ class SleepAwareDrift(DriftPlusPenalty):
 
 
 class TextbookDPP:
-    """Per-slot, per-cell drift-plus-penalty minimizer (no learning).
+    """Per-slot drift-plus-penalty minimizer over the joint action (no learning).
 
-    Each cell minimizes V * P_b + Q_b * (A_b - E[mu_b]) over its options, with
-    the power model of the environment (sleep, or awake at share phi, plus the
-    switching penalty when the sleep state changes) and the mean channel
-    multiplier. Awake cost is affine in phi, so the awake optimum is phi = 1 or
-    the minimum share; sleep serves nothing. V (watts to Mbit^2) trades power
-    against backlog and traces the controller's frontier. Offloading is not
-    anticipated (the per-cell decomposition ignores it), as in the textbook
-    decomposition. Requests respect the environment's hysteresis as any
-    controller's do.
+    Each slot it minimizes the drift-plus-penalty expression
+        V * P(a) + sum_b Q_b * (E[A_b | a] - E[mu_b | a])
+    over every sleep pattern the hysteresis admits in that slot (cells still
+    inside their minimum dwell keep their state) and, for each awake cell, the
+    share phi in {phi_lo, 1}, where phi_lo = 0 for a cell locked awake (its
+    sleep request would be refused and the zero share executed) and phi_min
+    otherwise. The expected effective arrival E[A_b | a] passes
+    a causal EWMA of each cell's nominal load (weight 0.01, as in the safety
+    filter) through the offloading map of the environment for the pattern, so
+    offloading onto awake neighbors is anticipated. Power includes the
+    switching penalty for every toggle and wake-up service is halved, as in the
+    environment; E[mu] uses the mean channel multiplier. Given a pattern the
+    expression is affine in each awake cell's share, so the share optimum is an
+    endpoint and the joint minimum is exact over the admissible set.
+
+    Up to the R2 draft this class decided each cell separately and dropped the
+    action dependence of A_b; that per-cell rule did not minimize the
+    expression in the offloading model and is replaced by this one.
     """
     name = "TextbookDPP"
+    EWMA = 0.01
 
     def __init__(self, cfg: SimCfg, V: float = 1e-3, **kwargs):
         self.cfg = cfg
         self.V = V
         self._m = 1.0
-        self._s = np.ones(cfg.topo.B, dtype=np.int32)
         self._env = None
+        self._a_hat = None
+        self._t_seen = -1
+        K = cfg.topo.B
+        self._pats = np.array(list(itertools.product([0, 1], repeat=K)),
+                              dtype=np.int32)
 
     def bind(self, env):
         self._m = float(np.mean(env.channel_pool))
         self._env = env
+        K = self.cfg.topo.B
+        # A_eff = M_s @ a for each pattern s (the offloading map is linear).
+        eye = np.eye(K)
+        self._M = np.stack([np.stack([env.redistribute(eye[j], s)[0]
+                                      for j in range(K)], axis=1)
+                            for s in self._pats]).astype(np.float64)
+        self._a_hat = np.full(K, float(self.cfg.arr.base_rate_Mb_per_slot))
+        self._t_seen = -1
 
     def reset(self, seed: int = 0):
         pass
 
+    def _update_estimate(self):
+        env = self._env
+        t = int(env.t)
+        if t > 0 and t - 1 != self._t_seen:
+            self._a_hat += self.EWMA * (env.arrivals[:, t - 1] - self._a_hat)
+            self._t_seen = t - 1
+
     def act(self, state, q_phys, stochastic: bool = True):
         c, e = self.cfg, self.cfg.energy
+        env = self._env
+        self._update_estimate()
         mu_cap = c.chan.mu_max_mbps * c.dt_s
         mu_floor = c.chan.mu_min_mbps * c.dt_s
         q = np.asarray(q_phys, dtype=np.float64)
-        s_prev = (self._env.s_prev if self._env is not None else self._s)
-        sw_awake = np.where(s_prev == 0, e.p_sw_W, 0.0)
-        sw_sleep = np.where(s_prev == 1, e.p_sw_W, 0.0)
-        wf = np.where(s_prev == 0, getattr(e, "wake_service_frac", 1.0), 1.0)
-
-        def awake_cost(phi):
-            return (self.V * (e.p_on_W + e.p_dyn_W * phi + sw_awake)
-                    - q * wf * (mu_floor + (mu_cap - mu_floor) * phi) * self._m)
-        c_lo = awake_cost(EPS_SLEEP_DPP)
-        c_hi = awake_cost(1.0)
-        c_sleep = self.V * (e.p_slp_W + sw_sleep)
-        phi = np.where(c_hi < c_lo, 1.0, EPS_SLEEP_DPP)
-        best_awake = np.minimum(c_lo, c_hi)
-        a = np.where(c_sleep < best_awake, 0.0, phi).astype(np.float32)
+        s_prev = env.s_prev.astype(np.int32)
+        min_d = np.where(s_prev == 1, e.min_on_slots, e.min_off_slots)
+        locked = env.dwell < min_d
+        pats = self._pats
+        ok = np.all(~locked[None, :] | (pats == s_prev[None, :]), axis=1)
+        pats, M = pats[ok], self._M[ok]
+        A = M @ self._a_hat                                # (P, K)
+        wake = (pats == 1) & (s_prev[None, :] == 0)
+        wf = np.where(wake, getattr(e, "wake_service_frac", 1.0), 1.0)
+        # Best share per awake cell: endpoint of an affine function. The
+        # lower endpoint is 0 for a cell locked awake by its minimum on-dwell
+        # (a sleep request is refused and the zero share is executed), and
+        # EPS_SLEEP_DPP otherwise (a smaller share would request sleep).
+        lo = np.where((s_prev == 1) & locked, 0.0, EPS_SLEEP_DPP)
+        gain = q[None, :] * wf * (mu_cap - mu_floor) * self._m   # per unit phi
+        phi = np.where(gain > self.V * e.p_dyn_W, 1.0, lo[None, :])
+        mu = wf * (mu_floor + (mu_cap - mu_floor) * phi) * self._m
+        P = np.where(pats == 1, e.p_on_W + e.p_dyn_W * phi, e.p_slp_W).sum(1)
+        P = P + e.p_sw_W * (pats != s_prev[None, :]).sum(1)
+        obj = (self.V * P + (q[None, :] * A).sum(1)
+               - (q[None, :] * mu * (pats == 1)).sum(1))
+        k = int(np.argmin(obj))
+        a = np.where(pats[k] == 1, phi[k], 0.0).astype(np.float32)
         return a, np.zeros_like(a), state, 0.0
 
     def update_tau_z_lambda(self, loss: float):

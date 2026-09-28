@@ -96,7 +96,8 @@ def lcb_project(action: np.ndarray, env, a_nom_hat: np.ndarray, cfg: SimCfg,
     force = active.copy()
     nbr = np.asarray(env.cov) > 0
     full_nom = mu_cap
-    for _ in range(3):
+    joint = bool(getattr(algo, "filter_joint_fallback", True))
+    for _ in range(3 if joint else 1):
         s_exec = env.predict_sleep(out, force_awake=force, commit=False)
         a_exp, _, _ = env.redistribute(a_nom_hat, s_exec)
         woke = (s_exec == 1) & (np.asarray(env.s_prev) == 0)
@@ -107,7 +108,7 @@ def lcb_project(action: np.ndarray, env, a_nom_hat: np.ndarray, cfg: SimCfg,
         for b in np.flatnonzero(short):
             wake_nb |= nbr[:, b] & (s_exec == 0)   # sleeping cells offloading onto b
         wake_nb &= ~force
-        if not wake_nb.any():
+        if not joint or not wake_nb.any():
             break
         force |= wake_nb
     nb_woken = force & ~active

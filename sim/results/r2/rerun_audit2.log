@@ -1,0 +1,80 @@
+  WCSAC always-on statistic (val) 1.6989 -> d_ret 1.9385
+  val TextbookDPP:1e-06    P= 1501.2 CVaR=3.072
+  val TextbookDPP:3e-06    P= 1501.2 CVaR=3.072
+  val TextbookDPP:1e-05    P= 1501.0 CVaR=3.073
+  val TextbookDPP:3e-05    P= 1498.5 CVaR=3.073
+  val TextbookDPP:0.0001   P= 1480.7 CVaR=3.078
+  val TextbookDPP:0.0003   P= 1418.6 CVaR=3.144
+  val TextbookDPP:0.001    P= 1074.6 CVaR=5.681
+  val TextbookDPP:0.003    P=  691.8 CVaR=9.787
+  val TextbookDPP:0.01     P=  522.6 CVaR=10.000
+  selected V: TextbookDPP:0.0003
+  -> sim/results/r2/calibration.json
+  test TextbookDPP:1e-06    P= 1500.6 CVaR=3.054 tog=96
+  test TextbookDPP:3e-06    P= 1500.6 CVaR=3.055 tog=97
+  test TextbookDPP:1e-05    P= 1500.3 CVaR=3.054 tog=104
+  test TextbookDPP:3e-05    P= 1497.6 CVaR=3.055 tog=160
+  test TextbookDPP:0.0001   P= 1479.6 CVaR=3.059 tog=493
+  test TextbookDPP:0.0003   P= 1417.2 CVaR=3.131 tog=1090
+  test TextbookDPP:0.001    P= 1071.0 CVaR=5.738 tog=3582
+  test TextbookDPP:0.003    P=  692.3 CVaR=9.780 tog=5401
+  test TextbookDPP:0.01     P=  522.3 CVaR=10.000 tog=2379
+  -> sim/results/r2/classical.json
+  [1/20] WCSAC seed 3311302123: 919s (elapsed 919s)
+  [2/20] WCSAC seed 1494885813: 928s (elapsed 929s)
+  [3/20] WCSAC seed 765964185: 930s (elapsed 931s)
+  [4/20] WCSAC seed 859387382: 963s (elapsed 963s)
+  [5/20] WCSAC seed 3736873475: 963s (elapsed 964s)
+  [6/20] WCSAC+F seed 1494885813: 975s (elapsed 975s)
+  [7/20] WCSAC+F seed 2037261841: 976s (elapsed 977s)
+  [8/20] WCSAC+F seed 859387382: 979s (elapsed 980s)
+  [9/20] WCSAC+F seed 3216124221: 986s (elapsed 986s)
+  [10/20] WCSAC+F seed 1345259536: 990s (elapsed 990s)
+  [11/20] WCSAC+F seed 3736873475: 996s (elapsed 997s)
+  [12/20] WCSAC+F seed 396484212: 998s (elapsed 998s)
+  [13/20] WCSAC+F seed 2866381271: 1006s (elapsed 1007s)
+  [14/20] WCSAC seed 1345259536: 1014s (elapsed 1014s)
+  [15/20] WCSAC seed 396484212: 1015s (elapsed 1016s)
+  [16/20] WCSAC+F seed 765964185: 1030s (elapsed 1030s)
+  [17/20] WCSAC seed 2037261841: 1038s (elapsed 1038s)
+  [18/20] WCSAC seed 2866381271: 1040s (elapsed 1041s)
+  [19/20] WCSAC seed 3216124221: 1060s (elapsed 1060s)
+  [20/20] WCSAC+F seed 3311302123: 1158s (elapsed 1159s)
+  WCSAC    P= 1063.4 CVaR=8.106 awake=4.56
+  WCSAC+F  P= 1551.9 CVaR=3.276 awake=6.82
+  -> sim/results/r2/learned_headline_filter_sens_scale.json
+[r2_rerun] all done in 1229s
+  val TextbookDPP:1e-06    P= 1501.2 CVaR=3.072
+  val TextbookDPP:3e-06    P= 1501.2 CVaR=3.072
+  val TextbookDPP:1e-05    P= 1501.0 CVaR=3.073
+  val TextbookDPP:3e-05    P= 1498.5 CVaR=3.073
+  val TextbookDPP:0.0001   P= 1480.7 CVaR=3.078
+  val TextbookDPP:0.0002   P= 1451.1 CVaR=3.097
+  val TextbookDPP:0.0003   P= 1418.6 CVaR=3.144
+  val TextbookDPP:0.0004   P= 1375.1 CVaR=3.279
+  val TextbookDPP:0.0005   P= 1329.7 CVaR=3.542
+  val TextbookDPP:0.0006   P= 1275.2 CVaR=3.976
+  val TextbookDPP:0.0007   P= 1222.0 CVaR=4.295
+  val TextbookDPP:0.0008   P= 1151.9 CVaR=4.699
+  val TextbookDPP:0.001    P= 1074.6 CVaR=5.681
+  val TextbookDPP:0.003    P=  691.8 CVaR=9.787
+  val TextbookDPP:0.01     P=  522.6 CVaR=10.000
+  selected V: TextbookDPP:0.0004
+  -> sim/results/r2/calibration.json
+  test TextbookDPP:1e-06    P= 1500.6 CVaR=3.054 tog=96
+  test TextbookDPP:3e-06    P= 1500.6 CVaR=3.055 tog=97
+  test TextbookDPP:1e-05    P= 1500.3 CVaR=3.054 tog=104
+  test TextbookDPP:3e-05    P= 1497.6 CVaR=3.055 tog=160
+  test TextbookDPP:0.0001   P= 1479.6 CVaR=3.059 tog=493
+  test TextbookDPP:0.0002   P= 1449.8 CVaR=3.076 tog=821
+  test TextbookDPP:0.0003   P= 1417.2 CVaR=3.131 tog=1090
+  test TextbookDPP:0.0004   P= 1373.7 CVaR=3.252 tog=1374
+  test TextbookDPP:0.0005   P= 1327.6 CVaR=3.547 tog=1753
+  test TextbookDPP:0.0006   P= 1273.1 CVaR=3.999 tog=2211
+  test TextbookDPP:0.0007   P= 1220.0 CVaR=4.363 tog=2610
+  test TextbookDPP:0.0008   P= 1148.4 CVaR=4.739 tog=2922
+  test TextbookDPP:0.001    P= 1071.0 CVaR=5.738 tog=3582
+  test TextbookDPP:0.003    P=  692.3 CVaR=9.780 tog=5401
+  test TextbookDPP:0.01     P=  522.3 CVaR=10.000 tog=2379
+  -> sim/results/r2/classical.json
+[r2_rerun] dpp done in 46s

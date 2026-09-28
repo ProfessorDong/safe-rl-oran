@@ -1,0 +1,32 @@
+{
+  "p": 0.75,
+  "gamma": 0.99,
+  "k_alpha": 2.0627128075074253,
+  "max_abs_error_fixed_point_vs_exact": 6.776263578034403e-21,
+  "s0_exact_mean_var": [
+    0.003712500000000003,
+    2.297109375000004e-05
+  ],
+  "s0_iterated_mean_var": [
+    0.003712500000000003,
+    2.2971093750000046e-05
+  ],
+  "s0_sampled_target_mean_var": [
+    0.0037211253750000033,
+    2.3056484962500043e-05
+  ],
+  "s0_lambda0_target_mean_var": [
+    0.0037171901250000025,
+    2.2982701809375047e-05
+  ],
+  "s0_lambda095_target_mean_var": [
+    0.003716308406250003,
+    2.2995465570000042e-05
+  ],
+  "actor_step_derivative": 0.0025000000000000022,
+  "actor_step_lr_expectation": 0.0025000000000000022,
+  "audit_true_statistic_derivative": 0.003315891151066397,
+  "r2_draft_estimator_derivative": -0.0004772694866882525,
+  "sign_agrees_with_true": true,
+  "r2_draft_sign_agrees": false
+}

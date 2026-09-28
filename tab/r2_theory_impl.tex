@@ -16,8 +16,9 @@
     Actor update & gradient step & PPO clipped ratio \\
     Conditioning & $X(t)$ & $X(t),\lambda,\tau$ \\
     Safety filter & drift condition \eqref{eq:exec_drift} & LCB projection or joint fallback \\
-    Arrival estimate & $\widehat a\ge\E[A\mid X,a]$ & causal EWMA through \eqref{eq:offload} \\
-    Projection & smoothed $\Pi_\rho$ & hard \\
+    Arrival estimate & $\widehat a\ge\E[A\mid X,a]$ & causal EWMA, not a certified bound \\
+    Queue bound & if \eqref{eq:exec_drift} holds & margin met, estimated, in $\ge98.5\%$ \\
+    Convergence & stationary points only & not proved \\
     Timescales & critic, actor, then $\lambda,\tau$ & $\tau$ per slot, others per rollout \\
     CVaR result & $\le\Gamma$ (conditional) & $3.468$ at $\Gamma\!=\!3.5$ \\
     \bottomrule

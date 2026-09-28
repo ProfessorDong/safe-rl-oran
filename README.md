@@ -26,7 +26,22 @@ were fixed and every experiment was rerun. In brief:
   of 1e6 to the networks as an input (2e4 after scaling), saturating every
   unit; WCSAC fitted one critic to two incompatible targets. All three are
   corrected (`sim/safe_baselines.py`), and their budgets are calibrated on
-  validation seeds at the same tightness relative to always-on.
+  validation seeds at the same tightness relative to always-on. WCSAC-GS
+  follows the source's structure: state-action mean and variance critics on
+  its Bellman targets (Eqs. 14-15, fitted by squared error) and its actor step
+  against the fixed safety measure Q_c + k sqrt(V_c), taken by the
+  likelihood-ratio estimator inside PPO. `sim/check_wcsac.py` checks the
+  targets and the sign of the actor step on an exact two-step MDP. Its
+  critics use lambda-return forms of the source's targets (the variance in its
+  equivalent direct form) with a target-network step after every gradient
+  step, and its budget is calibrated by Monte Carlo regression under
+  always-on (sim/r2.py, _wcsac_ao_stat_mc).
+* **Textbook drift-plus-penalty.** `TextbookDPP` minimizes
+  V P + sum_b Q_b (E[A_b | a] - E[mu_b | a]) jointly over the sleep patterns
+  the hysteresis admits and the share endpoints (0 for a cell locked awake by
+  its minimum dwell, 0.05 otherwise, and 1), with offloading anticipated
+  through the offload map (`sim/baselines.py`); `sim/check_dpp.py` checks it
+  exhaustively against the environment's feasible actions.
 * **Safety filter.** It now predicts arrivals under the sleep pattern that will
   execute, overrides the hysteresis dwell for safety wakes, charges the wake-up
   service loss, and executes a joint fallback when its projection is
@@ -36,7 +51,7 @@ were fixed and every experiment was rerun. In brief:
 * **Other fixes.** Phase feature aligned with the compressed daily cycle;
   CVaR threshold step ordered after the risk cost; PID anti-windup; exact
   empirical CVaR at ties; correlated channel that preserves the Lumos5G
-  marginal exactly; hexagonal topology for K = 19, 37, 61; loaders that refuse
+  marginal up to a finite-grid rank transform; hexagonal topology for K = 19, 37, 61; loaders that refuse
   synthetic substitutes; the rule formerly called drift-plus-penalty renamed
   backlog-proportional, with a textbook drift-plus-penalty controller added.
 * **Protocol.** Tuning and budget calibration use ten validation seeds; every
@@ -54,10 +69,10 @@ over seeds:
 |---|---|---|---|---|
 | Always-on reference | 1610.0 | 3.050 | 0.7% | 0 |
 | **Backlog-proportional, rho = 0.875** (validation-selected) | **1151.0** | **3.408** | **1.2%** | **0** |
-| Textbook drift-plus-penalty (closest to budget) | 1314.2 | 3.668 | 2.0% | 3195 |
+| Textbook drift-plus-penalty, V = 4e-4 (validation-selected) | 1373.3 | 3.252 | 1.0% | 1375 |
 | PPO-Lagrangian + LCB filter | 1393.7 | 3.320 | 1.1% | 5 |
 | CRPO + LCB filter | 1218.5 | 3.717 | 2.3% | 1022 |
-| WCSAC-GS (PPO adaptation) + LCB filter | 986.5 | 5.905 | 47.7% | 5581 |
+| WCSAC-GS + LCB filter | 1443.0 | 3.727 | 3.4% | 644 |
 | Proposed | 1343.6 | 3.468 | 1.5% | 53 |
 
 **The risk budget must be screened.** The loss contains an arrival term no
@@ -68,15 +83,21 @@ feasible witness for larger ones. Budgets in between are undetermined.
 
 **A simple rule is not beaten.** Among filtered learned methods whose mean tail
 meets the budget, the proposed controller draws the least power, but the
-backlog-proportional rule draws 192.7 W less (paired interval [162, 227]) at a
-tail that is not statistically distinguishable. The textbook drift-plus-penalty
-controller never meets the budget, because its bang-bang decision chatters.
+backlog-proportional rule draws 192.7 W less (paired interval [162, 227]) with
+no statistically detected difference in tail (+0.06, [-0.04, 0.18]). The
+textbook drift-plus-penalty controller meets the budget at 1373.3 W with a
+tighter tail than the proposed controller, but toggles 1375 times per minute.
+CVaR values are mean empirical CVaR over the ten test seeds; the proposed
+controller's interval [3.35, 3.61] crosses the budget.
 
 **The filter carries the tail.** Evaluating the trained policy with the filter
 bypassed raises CVaR from 3.468 to 7.280; the filter costs 23 W ([2, 50]) and
 acts on 4.8% of cell-slots, falling back to full service in 94% of those. With
-risk pressure removed, it holds time-average backlog below 13 Mb against an
-adversary that asks every cell to sleep, versus up to 14,992 Mb without it.
+risk pressure removed, it holds the seed-averaged time-average backlog below
+13 Mb against an adversary that asks every cell to sleep, versus up to
+14,992 Mb without it. This is empirical evidence: the queue theorem requires
+the true conditional drift condition, which the filter checks only with
+estimates.
 
 The paper does not claim an O(1/V) energy-gap guarantee: a per-state safety
 filter can carry an energy price that no Lyapunov weight removes, and the
@@ -127,10 +148,12 @@ code under `_provenance`.
 Arrivals are trace-shaped, not recorded slot by slot. Each episode compresses
 one 24-hour profile onto its slots; the nominal load is a scaled Poisson draw
 at `0.3 * h_b(t) / max(h_b)` Mb per slot (0.3 Mb is the busy-hour rate) plus
-Pareto bursts (probability 0.04, shape 2.5). Realized cell means are 0.18-0.25
-Mb per slot. The Lumos5G multiplier is the 68,118 records with a valid
-throughput field, normalized by the median and clipped to `[0.1, 2.0]`; the clip
-binds on 26.2% of samples above and 10.0% below.
+bursts `(1 + Y) * 1.5 * m` with probability 0.04, where `Y` is Lomax (Pareto II)
+with shape 2.5 (NumPy's `pareto`). Realized cell means are 0.18-0.25 Mb per
+slot. The Lumos5G multiplier is drawn from all 68,118 one-second throughput
+samples of the public release (23% of them logged on LTE), normalized by the
+median (424 Mbit/s) and clipped to `[0.1, 2.0]`; the clip binds on 26.1% of
+samples above and 10.0% below.
 
 ## Reproducing the results
 
@@ -152,6 +175,20 @@ OMP_NUM_THREADS=1 python3 -m sim.r2 stress
 OMP_NUM_THREADS=1 python3 -m sim.r2 corr
 OMP_NUM_THREADS=1 python3 -m sim.r2 timing
 OMP_NUM_THREADS=1 python3 -m sim.r2_scale_classical
+OMP_NUM_THREADS=1 python3 -m sim.r2_single_fallback   # single-cell fallback ablation
+python3 -m sim.check_wcsac                              # exact WCSAC estimator check
+python3 -m sim.check_dpp                                # exhaustive DPP optimality check
+
+# The released WCSAC-GS and textbook DPP results were produced after the main
+# campaign by the targeted rerun below: Monte Carlo calibration of the WCSAC
+# budget on validation seeds (with a held-out accuracy check and the TD-critic
+# diagnostic), the DPP validation grid and selection, test evaluation of the
+# DPP grid, and retraining/evaluation of WCSAC and WCSAC+F. The log is
+# sim/results/r2/rerun_audit3.log; replaced entries are kept under "_r2draft"
+# keys, superseded checkpoints under ckpt/_superseded/ and superseded per-slot
+# series under series/_superseded/. Every result JSON records the provenance
+# of each stage that wrote it (_provenance, _provenance_history).
+OMP_NUM_THREADS=1 python3 -m sim.r2_rerun all
 
 # Figures, table and paired statistics from sim/results/r2
 python3 -m sim.make_r2_figures
@@ -161,8 +198,12 @@ python3 -m sim.make_r2_tables
 Set `OMP_NUM_THREADS=1`: the networks are small enough that intra-op
 threading costs more than it saves, and single-threaded reductions make a
 rerun reproducible. The training stage skips any configuration whose final
-checkpoint already exists, so the committed checkpoints let `evaluate` and the
-later stages run without retraining. Test seeds are the first ten outputs of
+checkpoint already exists, so the released checkpoints let `evaluate` and the
+later stages run without retraining; delete a configuration's checkpoints to
+retrain it. Saved per-slot series (`sim/results/r2/series/`) hold loss, power
+and total backlog for the main evaluations, so CVaR, power and backlog
+summaries can be recomputed from them; delay-proxy, toggle, share and filter
+statistics, and the stress, sweep and scaling summaries, need a replay. Test seeds are the first ten outputs of
 `numpy.random.SeedSequence(20260601)` and validation seeds the next ten;
 evaluation traces use `seed + 9000`.
 

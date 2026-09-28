@@ -90,8 +90,8 @@ class EnergyCfg:
     # al. (VTC-Fall 2017, Table II) rather than the placeholder 5 W used in
     # the submitted version. Their 3-sector 2x2 MIMO site draws 750 W at full
     # load, 328 W idle and 28.5 W in SM3; per sector that is ~250 W / ~109 W
-    # / ~9.5 W, which brackets (p_on + p_dyn) / p_on / p_slp here, so the
-    # steady-state levels were already sector-calibrated.
+    # / ~9.5 W, comparable to (p_on + p_dyn) / p_on / p_slp = 230 / 130 / 8 W
+    # here (2010-technology values of the IMEC model).
     #
     # The transition was not. At a 10 ms slot the relevant depth is SM3
     # (10 ms transition time), split by Salem et al. into a deactivation
@@ -170,6 +170,10 @@ class AlgoCfg:
     q0_cell_Mb: float = 1.0               # lcb rule: per-cell activation q0
     delta_margin_Mb: float = 0.02         # lcb rule: drift margin delta
     lcb_kappa: float = 1.0       # conservative LCB factor: mu_LCB = mu_hat - kappa * sigma_hat
+    # Joint fallback: when full share cannot cover a backlogged cell's expected
+    # arrivals, also wake the sleeping neighbors that offload onto it. False
+    # reproduces the single-cell fallback used up to R2 (ablation only).
+    filter_joint_fallback: bool = True
     # Service-predictor error, swept for the robustness study (R1.3, R2.2).
     pred_bias: float = 0.0       # >0 = optimistic predictor (overestimates service)
     pred_scale: float = 1.0      # scaling on the predicted uncertainty
@@ -224,7 +228,7 @@ class AlgoCfg:
     # error. Setting K_P = K_D = 0 recovers the submitted behaviour.
     use_pid_dual: bool = True
     pid_kp: float = 1.0
-    pid_ki: float = 3e-3         # matches the submitted lr_dual
+    pid_ki: float = 3e-3         # per ROLLOUT; the baselines' integral step is lr_dual * rollout_slots = 0.768 per rollout
     pid_kd: float = 2.0
     pid_per_rollout: bool = True  # control at update rate, not per slot
 

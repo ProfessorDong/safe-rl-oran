@@ -86,7 +86,8 @@ def main():
 
     rows = [("Always-on", c["AlwaysOn"]),
             ("Threshold heuristic", c["Threshold"]),
-            (f"Textbook DPP, $V\\!=\\!{_sci(sel_V)}$", c[sel_V]),
+            (f"Textbook DPP, $V\\!=\\!{{{_sci(sel_V)}}}" + ("^\\dagger$" if ok_V else "$"),
+             c[sel_V]),
             (lab_rho(sel_rho, dag=True), c[sel_rho]),
             (lab_rho("x:1.0"), c["DriftPlusPenalty:1.0"]),
             (lab_rho("x:2.0"), c["DriftPlusPenalty:2.0"]),
@@ -106,9 +107,10 @@ def main():
              r"Subscripts are $95\%$ bootstrap intervals over seeds of the "
              r"per-episode value. $p_{99}$ is the backlog-based delay proxy. "
              r"$^\dagger$Selected on validation seeds as the lowest-power "
-             r"setting with mean $\mathrm{CVaR}_{0.95}\le\Gamma$; the textbook "
-             r"DPP and sleep-aware rows are the settings closest to the budget, "
-             r"since none meets it. Rows above the rule are non-learning "
+             r"setting with mean $\mathrm{CVaR}_{0.95}\le\Gamma$; "
+             + ("the sleep-aware row is the setting closest to the budget, "
+                "since none meets it. " if not ok_qs else "")
+             + r"Rows above the learned methods are non-learning "
              r"controllers.}",
              r"  \label{tab:headline}", r"  \footnotesize",
              r"  \setlength{\tabcolsep}{7pt}",
@@ -130,6 +132,7 @@ def main():
     an = dict(selection=dict(rho=sel_rho, rho_ok=ok_rho, qs=sel_qs,
                              qs_ok=ok_qs, V=sel_V, V_ok=ok_V))
     for name, m in (("rho_sel", c[sel_rho]), ("rho1", c["DriftPlusPenalty:1.0"]),
+                    ("dpp_sel", c[sel_V]),
                     ("wcsac_f", L("WCSAC+F")), ("crpo_f", L("CRPO+F")),
                     ("lagppo_f", L("LagPPO+F"))):
         an[f"proposed_minus_{name}"] = dict(
@@ -154,6 +157,7 @@ def main():
     seeds = f["_provenance"]["test_seeds"]
     frac = {}
     for tag in ("SafeRL_u%d_default" % U, sel_rho.replace(":", "_"),
+                sel_V.replace(":", "_"),
                 "LagPPO+F_u%d_default" % U, "CRPO+F_u%d_default" % U,
                 "WCSAC+F_u%d_default" % U):
         vals = []

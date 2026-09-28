@@ -36,6 +36,7 @@ import json
 import os
 import platform
 import subprocess
+import sys
 import time
 import multiprocessing as mp
 from typing import Dict, List
@@ -56,6 +57,7 @@ SERIES = os.path.join(OUT, "series")
 GAMMA = 3.5
 UPDATES = 3200
 CURVE_CKPTS = (200, 400, 800, 1600, 3200)
+WCSAC_CAL_UPDATES = 1600
 
 TEST_SEEDS = canonical_seeds(10)
 VAL_SEEDS = canonical_seeds(20)[10:]
@@ -64,7 +66,8 @@ if os.environ.get("R2_SMOKE"):
 
 RHO_GRID = [0.25, 0.5, 0.625, 0.75, 0.875, 1.0, 1.25, 1.5, 2.0, 3.0, 4.0]
 QS_GRID = [0.01, 0.02, 0.05, 0.1, 0.2, 0.4]
-V_GRID = [1e-6, 3e-6, 1e-5, 3e-5, 1e-4, 3e-4, 1e-3]
+V_GRID = [1e-6, 3e-6, 1e-5, 3e-5, 1e-4, 2e-4, 3e-4, 4e-4, 5e-4, 6e-4,
+          7e-4, 8e-4, 1e-3, 3e-3, 1e-2]
 
 # Learned configurations: name -> (controller, overrides)
 LEARNED = {
@@ -132,6 +135,13 @@ def _save(obj, name):
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, name)
     obj = dict(obj)
+    # Keep the provenance of every earlier writer of this file, so results
+    # produced by different stages or reruns remain identifiable.
+    hist = list(obj.get("_provenance_history", []))
+    if "_provenance" in obj and obj["_provenance"] and (
+            not hist or hist[-1] != obj["_provenance"]):
+        hist.append(obj["_provenance"])
+    obj["_provenance_history"] = hist
     obj["_provenance"] = _provenance()
     with open(path, "w") as f:
         json.dump(obj, f, indent=2, default=_json_default)
@@ -163,14 +173,20 @@ def _provenance() -> dict:
             rev, dirty = "unknown", True
         import hashlib
         h = hashlib.sha256()
+        files = {}
         for fn in sorted(os.listdir("sim")):
             if fn.endswith(".py"):
-                h.update(open(os.path.join("sim", fn), "rb").read())
+                b = open(os.path.join("sim", fn), "rb").read()
+                h.update(b)
+                files[fn] = hashlib.sha256(b).hexdigest()[:16]
         _PROV.update(arrival_source=src, channel_source=env.channel_source,
                      require_real_data=bool(cfg.require_real_data),
                      seed_sequence=20260601, test_seeds=TEST_SEEDS,
                      val_seeds=VAL_SEEDS, git_head=rev, sim_dirty=dirty,
-                     sim_sha256=h.hexdigest(), numpy=np.__version__,
+                     sim_sha256=h.hexdigest(), sim_file_sha256=files,
+                     written_utc=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                     entry=os.path.basename(sys.argv[0]) + " " + " ".join(sys.argv[1:]),
+                     numpy=np.__version__,
                      torch=torch.__version__, python=platform.python_version(),
                      updates=UPDATES)
     return dict(_PROV)
@@ -243,23 +259,155 @@ def _classical_eval(args):
     return m
 
 
-def _wcsac_ao_stat(seed):
+def _wcsac_mc_check(ctl, cfg, seed, n_eps=5):
+    """Validate the fitted always-on safety critic against Monte Carlo returns
+    on fresh always-on training-length episodes (not used in the fit).
+
+    For each slot the normalized discounted loss return G_t (zero after the
+    episode end, the convention of the targets) is computed backward; the
+    mean of Q_c(s_t, 1) is compared with the mean of G_t, and the mean of
+    V_c(s_t, 1) with the mean squared residual (G_t - Q_c(s_t, 1))^2, whose
+    expectation is the mean conditional variance plus the squared mean
+    error. Returns means and the Gamma statistic the budget uses."""
+    g = cfg.algo.gamma_disc
+    ones_t = torch.ones(cfg.topo.B)
+    Qs, Vs, Gs = [], [], []
+    for e in range(n_eps):
+        s_e = int(np.random.SeedSequence([seed, e, 99]).generate_state(1)[0])
+        arr, _ = generate_arrivals(cfg, T=cfg.time.T_slots_train, seed=s_e)
+        env = CellularEnv(cfg, arr, seed=s_e)
+        ctl.bind(env)
+        s = env.reset(seed=s_e)
+        X, L = [], []
+        done = False
+        while not done:
+            X.append(ctl.augment(s))
+            s, c, done = env.step(np.ones(cfg.topo.B, dtype=np.float32))
+            ctl.observe(c)
+            L.append((1.0 - g) * c["loss"])
+        G = np.zeros(len(L)); acc = 0.0
+        for t in reversed(range(len(L))):
+            acc = L[t] + g * acc
+            G[t] = acc
+        with torch.no_grad():
+            x = torch.from_numpy(np.array(X, dtype=np.float32))
+            a = ones_t.expand(len(X), -1)
+            Qs.append(ctl.q_c(x, a).numpy()); Vs.append(ctl.v_c(x, a).numpy())
+        Gs.append(G)
+    Q, V, G = (np.concatenate(z) for z in (Qs, Vs, Gs))
+    return dict(q_mean=float(Q.mean()), mc_mean=float(G.mean()),
+                v_mean=float(V.mean()), sq_resid_mean=float(((G - Q) ** 2).mean()),
+                mc_total_var=float(G.var()),
+                gamma_stat_fitted=float((Q + ctl.k_alpha * np.sqrt(V)).mean()))
+
+
+def _wcsac_ao_stat(seed, n_cal=None, check=True):
     """Fit the WCSAC safety critic to the always-on policy on a validation
-    seed and return the mean of its statistic J + k sqrt(M)."""
+    seed and return the mean of its statistic Q_c + k sqrt(V_c) over the
+    last quarter of the fitting rollouts, with a Monte Carlo accuracy check
+    on fresh episodes."""
     cfg = _cfg()
     env = _train_env(cfg, seed)
     ctl = WCSAC_GS(cfg, seed=seed)
     ones = np.ones(cfg.topo.B, dtype=np.float32)
-    raw0 = np.zeros(cfg.raw_dim, dtype=np.float32)
+    # Packed (z, raw) whose composed proposed action is all-ones (always-on),
+    # and the same policy for the safety critic's next-action expectation.
+    raw0 = np.concatenate([ones, np.full(cfg.topo.B, 20.0, dtype=np.float32)])
+    ctl.fixed_action = torch.from_numpy(ones)
     ctl.act = lambda s, q, stochastic=True: (ones, raw0, ctl.augment(s), 0.0)
     stats = []
-    n_cal = 12 if os.environ.get("R2_SMOKE") else 400
+    if n_cal is None:
+        n_cal = 12 if os.environ.get("R2_SMOKE") else WCSAC_CAL_UPDATES
     for u in range(n_cal):
         b = ctl.collect_rollout(env, cfg.algo.rollout_slots)
         ctl.update_actor_critic(b, critics_only=True)
         if u >= 3 * n_cal // 4:
             stats.append(ctl.last_gamma_pi)
-    return float(np.mean(stats))
+    out = dict(stat=float(np.mean(stats)), n_cal=n_cal)
+    if check:
+        out["mc"] = _wcsac_mc_check(ctl, cfg, seed)
+    return out
+
+
+def _ao_episodes(cfg, seed, tag, n_eps):
+    """States and normalized discounted loss returns (zero after the episode
+    end) of n_eps independent always-on training-length episodes."""
+    g = cfg.algo.gamma_disc
+    ctl = WCSAC_GS(cfg, seed=seed)
+    Xs, Gs = [], []
+    for e in range(n_eps):
+        s_e = int(np.random.SeedSequence([seed, e, tag]).generate_state(1)[0])
+        arr, _ = generate_arrivals(cfg, T=cfg.time.T_slots_train, seed=s_e)
+        env = CellularEnv(cfg, arr, seed=s_e)
+        ctl.bind(env)
+        s = env.reset(seed=s_e)
+        X, L, done = [], [], False
+        while not done:
+            X.append(ctl.augment(s))
+            s, c, done = env.step(np.ones(cfg.topo.B, dtype=np.float32))
+            ctl.observe(c)
+            L.append((1.0 - g) * c["loss"])
+        G = np.zeros(len(L)); acc = 0.0
+        for t in reversed(range(len(L))):
+            acc = L[t] + g * acc
+            G[t] = acc
+        Xs.append(np.array(X, dtype=np.float32)); Gs.append(G.astype(np.float32))
+    return ctl, np.concatenate(Xs), np.concatenate(Gs)
+
+
+def _wcsac_ao_stat_mc(seed, n_train=40, n_test=5, steps=3000):
+    """Monte Carlo calibration of the WCSAC statistic under always-on.
+
+    Under the deterministic always-on policy Q_c(s, 1) = E[G | s] and
+    V_c(s, 1) = Var(G | s). Q is fitted by squared error to Monte Carlo
+    returns G and V to the squared residuals (G - Q(s))^2 on n_train
+    independent episodes (no bootstrapping, so no target lag); on n_test
+    held-out episodes the fitted means are checked against the Monte Carlo
+    mean return and mean squared residual, and the statistic is the held-out
+    mean of Q + k sqrt(V). The population target of V is Var(G | s) plus the
+    squared error of Q, but a finite network fitted to in-sample residuals
+    need not upper-bound the true conditional variance; the held-out check
+    is empirical, not a certificate."""
+    from .safe_baselines import SACritic, gaussian_cvar_coeff
+    cfg = _cfg()
+    torch.manual_seed(seed % (2 ** 31))
+    ctl, X, G = _ao_episodes(cfg, seed, 11, n_train)
+    _, Xt, Gt = _ao_episodes(cfg, seed, 12, n_test)
+    B = cfg.topo.B
+    a = torch.ones(len(X), B); at = torch.ones(len(Xt), B)
+    x, y = torch.from_numpy(X), torch.from_numpy(G)
+    xt, yt = torch.from_numpy(Xt), torch.from_numpy(Gt)
+
+    def fit(net, target):
+        opt = torch.optim.Adam(net.parameters(), lr=1e-3)
+        n = len(x)
+        for k in range(steps):
+            idx = torch.randint(0, n, (4096,))
+            opt.zero_grad()
+            F.mse_loss(net(x[idx], a[idx]), target[idx]).backward()
+            opt.step()
+        return net
+    import torch.nn.functional as F
+    h = cfg.algo.hidden
+    q = fit(SACritic(cfg.state_dim, B, h, cfg.algo.n_layers), y)
+    with torch.no_grad():
+        r2_ = (y - q(x, a)).pow(2)
+    v = fit(SACritic(cfg.state_dim, B, h, cfg.algo.n_layers, positive=True), r2_)
+    k = gaussian_cvar_coeff(1.0 - cfg.algo.beta)
+    with torch.no_grad():
+        qt, vt = q(xt, at), v(xt, at)
+        stat = float((qt + k * vt.sqrt()).mean())
+        out = dict(stat=stat, q_mean=float(qt.mean()), mc_mean=float(yt.mean()),
+                   v_mean=float(vt.mean()),
+                   sq_resid_mean=float((yt - qt).pow(2).mean()),
+                   mc_total_var=float(yt.var()),
+                   n_train_slots=int(len(x)), n_test_slots=int(len(xt)))
+    return out
+
+
+def _wcsac_ao_both(seed):
+    """Monte Carlo calibration plus the TD-critic diagnostic for one seed."""
+    return dict(mc=_wcsac_ao_stat_mc(seed), td=_wcsac_ao_stat(seed))
 
 
 def stage_calibrate(pool):
@@ -269,11 +417,13 @@ def stage_calibrate(pool):
     g_ao = float(np.mean([r["cvar_beta"] for r in rows]))
     ml_ao = float(np.mean([r["mean_loss"] for r in rows]))
     ratio = GAMMA / g_ao
-    wc = pool.map(_wcsac_ao_stat, VAL_SEEDS)
+    wcd = pool.map(_wcsac_ao_both, VAL_SEEDS)
+    wc = [d["mc"]["stat"] for d in wcd]
     budgets = dict(gamma=GAMMA, gamma_ao_val=g_ao, tightness=ratio,
                    mean_loss_ao_val=ml_ao, d_mean=ratio * ml_ao,
                    wcsac_stat_ao_val=float(np.mean(wc)),
-                   d_ret=ratio * float(np.mean(wc)), wcsac_stat_per_seed=wc)
+                   d_ret=ratio * float(np.mean(wc)), wcsac_stat_per_seed=wc,
+                   wcsac_calibration_check=wcd)
     print(f"  Gamma_AO(val)={g_ao:.3f} tightness={ratio:.3f} "
           f"d_mean={budgets['d_mean']:.3f} d_ret={budgets['d_ret']:.4f}")
 

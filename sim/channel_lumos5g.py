@@ -22,7 +22,7 @@ CACHE_NAME = "lumos5g_cache.npz"
 
 def _try_load(cfg: SimCfg) -> np.ndarray | None:
     """Return a 1-D NumPy array of normalized throughput multipliers
-    (mean = 1.0, capped at [0.1, 2.0]), or None if the dataset is absent."""
+    (median = 1.0, capped at [0.1, 2.0]), or None if the dataset is absent."""
     csv = os.path.join(cfg.data_dir, LUMOS_REL)
     if not os.path.exists(csv):
         return None
@@ -32,7 +32,7 @@ def _try_load(cfg: SimCfg) -> np.ndarray | None:
         return None
     try:
         df = pd.read_csv(csv)
-        # Use Throughput column. Median ~80 Mbps.
+        # Use Throughput column. Median 424 Mbit/s.
         thr = df["Throughput"].dropna().astype(float).values
         if len(thr) == 0:
             return None
